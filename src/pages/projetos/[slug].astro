@@ -1,0 +1,53 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProjectLinks from '../../components/astro/ProjectLinks.astro';
+import { getGithubMeta } from '../../lib/content';
+import { getProjectRelations } from '../../lib/relations';
+import { formatDate } from '../../lib/seo';
+
+export async function getStaticPaths() {
+  const projects = await getCollection('projects');
+  return projects.map((project) => ({ params: { slug: project.id }, props: { project } }));
+}
+
+const { project } = Astro.props;
+const { Content } = await render(project);
+const meta = (await getGithubMeta()).get(project.data.repo);
+const { lab, writeup } = await getProjectRelations(project);
+---
+
+<BaseLayout title={project.data.title} description={project.data.summary}>
+  <article class="prose-page">
+    <header class="mb-6 border-b border-border pb-6">
+      <div class="mb-2 flex flex-wrap gap-1.5 text-xs text-muted">
+        {project.data.tags.map((t) => <span>#{t}</span>)}
+      </div>
+      <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">{project.data.title}</h1>
+      <p class="mt-2 text-lg text-muted">{project.data.summary}</p>
+
+      {
+        meta && (
+          <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+            {meta.language && <span>{meta.language}</span>}
+            <span>★ {meta.stars}</span>
+            {meta.lastCommit && <span>último commit: {formatDate(new Date(meta.lastCommit))}</span>}
+            {meta.license && <span>{meta.license}</span>}
+          </div>
+        )
+      }
+
+      <div class="mt-5">
+        <ProjectLinks repoUrl={meta?.url} demoSlug={lab?.id} writeupSlug={writeup?.id} />
+      </div>
+    </header>
+
+    <div class="article-body">
+      <Content />
+    </div>
+
+    <footer class="mt-12 border-t border-border pt-6 text-sm text-muted">
+      <a href="/projetos" class="no-underline">← Todos os projetos</a>
+    </footer>
+  </article>
+</BaseLayout>

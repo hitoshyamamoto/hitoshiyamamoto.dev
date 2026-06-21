@@ -1,0 +1,29 @@
+[
+  {
+    "id": "hayai",
+    "repo": "hayai",
+    "url": "https://github.com/hitoshyamamoto/hayai",
+    "language": "TypeScript",
+    "stars": 2,
+    "lastCommit": "2026-06-12",
+    "license": "MIT"
+  },
+  {
+    "id": "maze-solver",
+    "repo": "maze-solver",
+    "url": "https://github.com/hitoshyamamoto/maze-solver",
+    "language": "TypeScript",
+    "stars": 0,
+    "lastCommit": "2026-06-10",
+    "license": "MIT"
+  },
+  {
+    "id": "soapbar",
+    "repo": "soapbar",
+    "url": "https://github.com/hitoshyamamoto/soapbar",
+    "language": "Python",
+    "stars": 0,
+    "lastCommit": "2026-06-16",
+    "license": "Apache-2.0"
+  }
+]

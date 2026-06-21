@@ -1,0 +1,52 @@
+---
+import ProjectLinks from './ProjectLinks.astro';
+import { getGithubMeta } from '../../lib/content';
+import { getProjectRelations } from '../../lib/relations';
+import { formatDate } from '../../lib/seo';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  project: CollectionEntry<'projects'>;
+}
+const { project } = Astro.props;
+
+const meta = (await getGithubMeta()).get(project.data.repo);
+const { lab, writeup } = await getProjectRelations(project);
+---
+
+<article class="card flex flex-col gap-3 hover:border-accent/50">
+  <div class="flex items-start justify-between gap-3">
+    <a href={`/projetos/${project.id}`} class="no-underline">
+      <h3 class="text-lg font-semibold tracking-tight text-fg hover:text-accent">
+        {project.data.title}
+      </h3>
+    </a>
+    {project.data.highlight && <span class="badge border-accent/40 text-accent">destaque</span>}
+  </div>
+
+  <p class="text-sm text-muted">{project.data.summary}</p>
+
+  {
+    meta && (
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+        {meta.language && (
+          <span class="inline-flex items-center gap-1">
+            <span class="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+            {meta.language}
+          </span>
+        )}
+        <span>★ {meta.stars}</span>
+        {meta.lastCommit && <span>último commit: {formatDate(new Date(meta.lastCommit))}</span>}
+        {meta.license && <span>{meta.license}</span>}
+      </div>
+    )
+  }
+
+  <div class="mt-1">
+    <ProjectLinks
+      repoUrl={meta?.url}
+      demoSlug={lab?.id}
+      writeupSlug={writeup?.id}
+    />
+  </div>
+</article>

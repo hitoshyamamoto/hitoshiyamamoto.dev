@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+  <rect width="800" height="450" fill="#0c0a09"/>
+  <g stroke="#44403c" stroke-width="2" fill="none">
+    <path d="M40 40 H760 V410 H40 Z"/>
+    <path d="M120 40 V330 M200 120 V410 M280 40 V250 M360 130 V410 M440 40 V300 M520 90 V410 M600 40 V340 M680 110 V410"/>
+    <path d="M40 120 H280 M120 200 H440 M200 290 H600 M360 90 H760 M280 360 H680"/>
+  </g>
+  <rect x="48" y="48" width="56" height="56" fill="#10b981"/>
+  <rect x="696" y="346" width="56" height="56" fill="#ef4444"/>
+  <g fill="#2dd4bf"><rect x="130" y="130" width="20" height="20"/><rect x="210" y="210" width="20" height="20"/><rect x="290" y="290" width="20" height="20"/><rect x="370" y="300" width="20" height="20"/></g>
+  <text x="400" y="430" font-family="Inter, sans-serif" font-size="18" fill="#a8a29e" text-anchor="middle">Visualizador de labirintos</text>
+</svg>

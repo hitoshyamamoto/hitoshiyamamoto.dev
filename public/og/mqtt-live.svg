@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+  <rect width="800" height="450" fill="#0c0a09"/>
+  <polyline points="40,300 120,220 200,260 280,150 360,200 440,110 520,180 600,90 680,160 760,120"
+            fill="none" stroke="#2dd4bf" stroke-width="4"/>
+  <circle cx="760" cy="120" r="8" fill="#2dd4bf"/>
+  <circle cx="60" cy="60" r="8" fill="#10b981"/>
+  <text x="90" y="68" font-family="JetBrains Mono, monospace" font-size="22" fill="#a8a29e">telemetria/sensor-01</text>
+  <text x="400" y="430" font-family="Inter, sans-serif" font-size="18" fill="#a8a29e" text-anchor="middle">Telemetria MQTT ao vivo</text>
+</svg>

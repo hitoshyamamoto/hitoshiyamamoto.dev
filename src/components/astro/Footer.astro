@@ -1,0 +1,23 @@
+---
+const year = new Date().getFullYear();
+const socials = [
+  { href: 'https://github.com/hitoshyamamoto', label: 'GitHub' },
+  { href: 'https://medium.com/@hitoshyamamoto', label: 'Medium' },
+  { href: '/rss.xml', label: 'RSS' },
+];
+---
+
+<footer class="border-t border-border">
+  <div class="container-page flex flex-col items-center justify-between gap-3 py-8 text-sm text-muted sm:flex-row">
+    <p>© {year} Hitoshi Yamamoto · feito com Astro</p>
+    <div class="flex items-center gap-4">
+      {
+        socials.map((s) => (
+          <a href={s.href} class="text-muted no-underline hover:text-accent">
+            {s.label}
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</footer>

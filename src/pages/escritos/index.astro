@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostCard from '../../components/astro/PostCard.astro';
+import { getUnifiedFeed } from '../../lib/content';
+
+const feed = await getUnifiedFeed();
+---
+
+<BaseLayout title="Escritos" description="Feed unificado: artigos nativos e posts agregados do Medium.">
+  <header class="mb-8 max-w-2xl">
+    <h1 class="text-3xl font-bold tracking-tight">Escritos</h1>
+    <p class="mt-2 text-muted">
+      Tudo que escrevo num feed só — artigos nativos deste site e posts agregados
+      do Medium, ordenados por data.
+    </p>
+  </header>
+
+  <div class="grid gap-4 sm:grid-cols-2">
+    {feed.map((item) => <PostCard item={item} />)}
+  </div>
+
+  {feed.length === 0 && <p class="text-muted">Nada publicado ainda.</p>}
+</BaseLayout>

@@ -1,0 +1,53 @@
+name: refresh-data
+
+# Pipeline desacoplado (ARQUITETURA §4 e §7): roda os fetchers no cron,
+# atualiza os JSON em src/data/ e commita. Esse commit dispara o deploy.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # a cada 6 horas
+  workflow_dispatch: {} # permite rodar manualmente
+
+permissions:
+  contents: write # para commitar os artefatos atualizados
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Fetch Medium (append-only)
+        run: npm run fetch:medium
+        env:
+          MEDIUM_USER: hitoshyamamoto
+
+      - name: Fetch GitHub (curados)
+        run: npm run fetch:github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_OWNER: hitoshyamamoto
+
+      - name: Commit artefatos atualizados
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n "$(git status --porcelain src/data)" ]]; then
+            git add src/data
+            git commit -m "chore(data): refresh medium/github artifacts"
+            git push
+          else
+            echo "Sem mudanças nos artefatos. Nada a commitar."
+          fi

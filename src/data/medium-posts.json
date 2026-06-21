@@ -1,0 +1,159 @@
+[
+  {
+    "id": "git-na-pratica-um-guia-completo-e-explicado-para-iniciantes",
+    "source": "medium",
+    "title": "Git na Prática — Um Guia Completo e Explicado para Iniciantes",
+    "slug": "git-na-pratica-um-guia-completo-e-explicado-para-iniciantes",
+    "url": "https://medium.com/@hitoshyamamoto/git-na-pr%C3%A1tica-um-guia-completo-e-explicado-para-iniciantes-7cdaf1914e1f",
+    "publishedAt": "2026-01-14",
+    "summary": "Git na Prática — Um Guia Completo e Explicado para Iniciantes Uma abordagem de passo a passo para dominar Git a partir dos primeiros comandos até fluxos de trabalho essenciais. Introdução O Git é um…",
+    "tags": [
+      "beginners-guide",
+      "programming",
+      "terminal",
+      "git",
+      "distributed-systems"
+    ]
+  },
+  {
+    "id": "git-como-uma-crise-no-linux-virou-o-padrao-de-colaboracao-do-mundo-moderno",
+    "source": "medium",
+    "title": "Git: como uma crise no Linux virou o padrão de colaboração do mundo moderno",
+    "slug": "git-como-uma-crise-no-linux-virou-o-padrao-de-colaboracao-do-mundo-moderno",
+    "url": "https://medium.com/@hitoshyamamoto/git-como-uma-crise-no-linux-virou-o-padr%C3%A3o-de-colabora%C3%A7%C3%A3o-do-mundo-moderno-dce02918f884",
+    "publishedAt": "2026-01-02",
+    "summary": "fonte: wallpaperbat — link Neste artigo, irei escrever sobre o Git em pontos histórico e teórico , passando por: cenário antes do Git existir; por quais motivos o Linux foi parar numa ferramenta…",
+    "tags": [
+      "linux",
+      "distributed-systems",
+      "git"
+    ]
+  },
+  {
+    "id": "inteligencia-artificial-introducao",
+    "source": "medium",
+    "title": "Inteligência Artificial — Introdução",
+    "slug": "inteligencia-artificial-introducao",
+    "url": "https://medium.com/@hitoshyamamoto/intelig%C3%AAncia-artificial-introdu%C3%A7%C3%A3o-9ec4f3bf7b95",
+    "publishedAt": "2024-04-06",
+    "summary": "Inteligência Artificial — Introdução fonte: bibliotecas da Scikit-learn A Inteligência Artificial (IA) é um campo de estudo multidisciplinar dedicado ao desenvolvimento de sistemas de computador…",
+    "tags": [
+      "history-of-technology",
+      "artificial-intelligence",
+      "neural-networks",
+      "python",
+      "tensorflow"
+    ]
+  },
+  {
+    "id": "por-que-javascript-e-typescript",
+    "source": "medium",
+    "title": "Por que JavaScript e TypeScript?",
+    "slug": "por-que-javascript-e-typescript",
+    "url": "https://medium.com/@hitoshyamamoto/por-que-javascript-e-typescript-fd21452d75e8",
+    "publishedAt": "2024-04-04",
+    "summary": "Neste artigo, irei escrever sobre algumas das linguagens de programação e ferramentas muitas vezes solicitadas no mundo do Back-end em soluções e projetos mais modernos, sendo eles: - JavaScript -…",
+    "tags": [
+      "nodejs",
+      "web-development",
+      "backend",
+      "javascript"
+    ]
+  },
+  {
+    "id": "potencializando-o-mapeamento-do-fluxo-de-valor-com-inteligencia-artificial",
+    "source": "medium",
+    "title": "Potencializando o Mapeamento do Fluxo de Valor com Inteligência Artificial",
+    "slug": "potencializando-o-mapeamento-do-fluxo-de-valor-com-inteligencia-artificial",
+    "url": "https://medium.com/@hitoshyamamoto/potencializando-o-mapeamento-do-fluxo-de-valor-com-intelig%C3%AAncia-artificial-d626aeceffce",
+    "publishedAt": "2023-10-23",
+    "summary": "Fonte: Imagem gerada na Microsoft Bing Image Creator O Value Stream Mapping (VSM) — em português “Mapeamento do Fluxo de Valor” — é uma técnica amplamente usada no contexto da melhoria contínua de…",
+    "tags": [
+      "vsm",
+      "inteligencia-artificial",
+      "value-stream-mapping",
+      "kaizen",
+      "industry"
+    ]
+  },
+  {
+    "id": "introducao-a-inteligencia-artificial-machine-learning-e-a-sua-taxonomia-em-algor",
+    "source": "medium",
+    "title": "Introdução a Inteligência Artificial: Machine Learning e a sua Taxonomia em Algoritmos…",
+    "slug": "introducao-a-inteligencia-artificial-machine-learning-e-a-sua-taxonomia-em-algor",
+    "url": "https://medium.com/@hitoshyamamoto/introdu%C3%A7%C3%A3o-a-intelig%C3%AAncia-artificial-machine-learning-e-a-sua-taxonomia-em-algoritmos-814e162d8246",
+    "publishedAt": "2023-10-20",
+    "summary": "Introdução a Inteligência Artificial: Machine Learning e a sua Taxonomia em Algoritmos Supervisionados Fonte: Panorama Positivo — https://www.meupositivo.com.br Dentro do campo da Inteligência…",
+    "tags": [
+      "algorithms",
+      "machine-learning",
+      "engineering",
+      "computer-science",
+      "inteligencia-artificial"
+    ]
+  },
+  {
+    "id": "ferramentas-e-linguagens-no-excel",
+    "source": "medium",
+    "title": "Ferramentas e Linguagens no Excel",
+    "slug": "ferramentas-e-linguagens-no-excel",
+    "url": "https://medium.com/@hitoshyamamoto/ferramentas-e-linguagens-no-excel-d6e77aa5df3a",
+    "publishedAt": "2023-10-13",
+    "summary": "Image created using the “Bing Image Creator” tool. Hoje, irei escrever neste artigo sobre algumas ferramentas e linguagens que estão dentro do Excel como, por exemplo: VBA (Visual Basic for…",
+    "tags": [
+      "programming",
+      "etl",
+      "excel",
+      "macro",
+      "vba"
+    ]
+  },
+  {
+    "id": "conceitos-lean-manufacturing-02-termos-e-conceitos-usados-no-contexto-toyota-pro",
+    "source": "medium",
+    "title": "Conceitos Lean Manufacturing — 02 — Termos e Conceitos usados no contexto Toyota Production System",
+    "slug": "conceitos-lean-manufacturing-02-termos-e-conceitos-usados-no-contexto-toyota-pro",
+    "url": "https://medium.com/@hitoshyamamoto/conceitos-lean-manufacturing-02-termos-e-conceitos-usados-no-contexto-toyota-production-system-f2809fcde365",
+    "publishedAt": "2023-07-03",
+    "summary": "Conceitos Lean Manufacturing — 02 — Termos e Conceitos usados no contexto Toyota Production System Quando li sobre Lean Manufacturing e entendi que ele se originou do modelo do Toyotismo, percebi a…",
+    "tags": [
+      "lean",
+      "manufacturing",
+      "engineering",
+      "lean-manufacturing",
+      "toyota"
+    ]
+  },
+  {
+    "id": "conceitos-lean-manufacturing-01-a-historia",
+    "source": "medium",
+    "title": "Conceitos Lean Manufacturing — 01 — A História",
+    "slug": "conceitos-lean-manufacturing-01-a-historia",
+    "url": "https://medium.com/@hitoshyamamoto/conceitos-lean-manufacturing-01-a-hist%C3%B3ria-7a870c20821e",
+    "publishedAt": "2023-06-22",
+    "summary": "Conceitos Lean Manufacturing — 01 — A História Ao longo da história, o sistema de produção evoluiu passando por diferentes estágios e abordagens. Sendo eles: Produção Artesanal: A produção era…",
+    "tags": [
+      "produção-enxuta",
+      "toyota",
+      "lean-manufacturing",
+      "lean",
+      "industry"
+    ]
+  },
+  {
+    "id": "certificado-digital-e-token-guia",
+    "source": "medium",
+    "title": "Certificado Digital e Token — Guia",
+    "slug": "certificado-digital-e-token-guia",
+    "url": "https://medium.com/@hitoshyamamoto/certificado-digital-e-token-guia-9cfbde26d8f3",
+    "publishedAt": "2022-03-03",
+    "summary": "Certificado Digital e Token — Guia Desde que comecei o estágio na DTI, tive primeiro contato com tokens e certificado digital e, em seguida, fui aprendendo o que são essas ferramentas no dia-a-dia…",
+    "tags": [
+      "technology",
+      "token",
+      "tecnologia",
+      "assinatura-digital",
+      "certificado-digital"
+    ]
+  }
+]

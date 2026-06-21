@@ -1,0 +1,116 @@
+---
+title: "PCA na prática: antecipando falhas de bombas industriais"
+kind: interactive
+publishedAt: 2026-06-20
+summary: "Erro de reconstrução do PCA aplicado ao pump-sensor-data do Kaggle: como detectar a degradação antes do BROKEN."
+tags: ["machine-learning", "pca", "anomaly-detection", "manutencao-preditiva"]
+lang: pt
+---
+
+import PumpAnomalyChart from '../../components/react/PumpAnomalyChart.tsx';
+import PcaSimulator from '../../components/react/PcaSimulator.tsx';
+
+Detecção de anomalias é um daqueles problemas onde rotular é caro e a falha é
+rara. Você quase nunca tem exemplos suficientes de "quebrado" para treinar um
+classificador — mas tem horas e horas de "funcionando". O PCA explora exatamente
+essa assimetria: aprende a forma do regime normal e denuncia tudo que foge dela.
+
+Para sair do abstrato, vou usar o
+[pump-sensor-data](https://www.kaggle.com/datasets/nphantawee/pump-sensor-data/data):
+~220 mil leituras por minuto de **52 sensores** de uma estação de bombeamento,
+com uma coluna `machine_status` que assume `NORMAL`, `BROKEN` e `RECOVERING`. Há
+**7 falhas** no período. O objetivo prático não é apenas marcar o minuto do
+`BROKEN` — é perceber a degradação *antes* dele.
+
+## A ideia em uma frase
+
+O PCA encontra o subespaço de menor dimensão que melhor explica a variância dos
+dados normais. Projetar uma amostra nesse subespaço e reconstruí-la introduz um
+erro: o **erro de reconstrução** (ou estatística SPE / Q). Enquanto a bomba opera
+no regime aprendido, esse erro é baixo. Quando um mancal começa a vibrar fora do
+padrão, a correlação entre sensores muda, a amostra deixa de "caber" no subespaço
+e o erro dispara.
+
+<PcaSimulator client:visible />
+
+Acima, a intuição geométrica em 2D: o eixo tracejado é o componente principal
+aprendido; o segmento colorido é o erro de reconstrução. Aumente a variância ou o
+desvio do regime e o ponto se afasta do eixo — o score cruza o limiar.
+
+## O pipeline sobre o dataset
+
+A regra de ouro: **ajustar o PCA apenas no regime normal**. Se a falha entrar no
+treino, ela vira "normal" e o detector fica cego justamente para o que importa.
+
+```python
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+df = pd.read_csv("sensor.csv", parse_dates=["timestamp"])
+
+# sensor_15 vem totalmente vazio; sensor_50 é esparso — limpe antes de tudo
+sensors = [c for c in df.columns if c.startswith("sensor_") and c != "sensor_15"]
+X = df[sensors].interpolate().ffill().bfill()
+
+# padroniza usando SÓ o regime normal (média/escala do "saudável")
+normal = X[df["machine_status"] == "NORMAL"]
+scaler = StandardScaler().fit(normal)
+
+# retém 95% da variância do regime normal
+pca = PCA(n_components=0.95).fit(scaler.transform(normal))
+```
+
+Com o modelo ajustado, calcula-se o erro de reconstrução (SPE) para a série
+inteira e calibra-se o limiar num percentil alto **do regime normal** — nunca dos
+dados de falha:
+
+```python
+Xs   = scaler.transform(X)
+proj = pca.inverse_transform(pca.transform(Xs))   # projeta e reconstrói
+spe  = np.sum((Xs - proj) ** 2, axis=1)           # erro de reconstrução
+
+thr = np.percentile(spe[df["machine_status"] == "NORMAL"], 99)
+df["anomaly"] = spe > thr
+```
+
+## Movendo o limiar
+
+É aqui que a teoria encontra a operação. O percentil do limiar é uma escolha de
+negócio, não de matemática: baixo demais, a sala de controle ignora os alarmes;
+alto demais, a falha passa. Arraste o limiar e observe o trade-off entre
+**antecedência** (quão cedo o PCA sinaliza antes do `BROKEN`) e **alarmes falsos**
+no regime normal:
+
+<PumpAnomalyChart client:visible />
+
+Repare no ponto circulado em verde: é a primeira amostra acima do limiar dentro
+da rampa de degradação. A diferença entre ele e a linha vermelha do `BROKEN` é a
+janela que a equipe de manutenção ganha para agir — de horas a dias, dependendo
+de quão cedo a assinatura da falha emerge.
+
+## SPE não é a única estatística
+
+O erro de reconstrução captura o que sai do subespaço. A estatística **T² de
+Hotelling** é complementar: mede o quão extrema é a amostra *dentro* do subespaço
+(distância de Mahalanobis nos componentes retidos). Falhas reais costumam acender
+uma, a outra, ou as duas — monitorar ambas reduz o ponto cego:
+
+```python
+scores = pca.transform(Xs)
+t2 = np.sum((scores / np.sqrt(pca.explained_variance_)) ** 2, axis=1)
+```
+
+## O que levar deste exemplo
+
+- **Treine só no normal.** O detector tem que ignorar a falha durante o ajuste.
+- **Padronize.** Sensores em escalas diferentes desequilibram a variância e o PCA
+  passa a "enxergar" só o sensor mais barulhento.
+- **O limiar é decisão operacional.** Calibre no regime normal e ajuste pelo custo
+  relativo de um alarme falso versus uma falha não detectada.
+- **SPE + T² juntos.** Cada estatística cobre um tipo de desvio.
+
+O PCA não é o detector mais sofisticado que existe — autoencoders e modelos
+temporais vão além. Mas é barato, interpretável e roda perto do sensor, e na
+maioria das estações de bombeamento isso é exatamente o que se precisa.

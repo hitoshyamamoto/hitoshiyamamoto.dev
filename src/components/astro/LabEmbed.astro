@@ -1,0 +1,57 @@
+---
+// Carrega o iframe só no clique: o poster estático evita o cold start do
+// embed e mantém o custo da página inicial baixo.
+interface Props {
+  embedUrl?: string;
+  poster: string;
+  title: string;
+}
+const { embedUrl, poster, title } = Astro.props;
+const id = `lab-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+{
+  embedUrl ? (
+    <div class="overflow-hidden rounded-xl border border-border" data-lab-embed={id}>
+      <button
+        type="button"
+        class="group relative block w-full"
+        data-lab-trigger
+        aria-label={`Carregar demo: ${title}`}
+        style={`aspect-ratio: 16/9; background-image: url(${poster}); background-size: cover; background-position: center;`}
+      >
+        <span class="absolute inset-0 flex items-center justify-center bg-black/40 transition-colors group-hover:bg-black/30">
+          <span class="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-black">
+            <span aria-hidden="true">▶</span> Carregar demo
+          </span>
+        </span>
+      </button>
+      <template data-lab-iframe>
+        <iframe
+          src={embedUrl}
+          title={title}
+          loading="lazy"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+          style="aspect-ratio: 16/9; width: 100%; border: 0; display: block;"
+        />
+      </template>
+    </div>
+  ) : (
+    <div class="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted">
+      Demo local (island) — renderizado pela página do Lab.
+    </div>
+  )
+}
+
+<script>
+  // Troca o poster pelo iframe no primeiro clique. Sem dependências.
+  document.querySelectorAll('[data-lab-embed]').forEach((wrap) => {
+    const trigger = wrap.querySelector('[data-lab-trigger]');
+    const tpl = wrap.querySelector('[data-lab-iframe]') as HTMLTemplateElement | null;
+    trigger?.addEventListener('click', () => {
+      if (!tpl) return;
+      const frame = tpl.content.cloneNode(true);
+      trigger.replaceWith(frame);
+    });
+  });
+</script>

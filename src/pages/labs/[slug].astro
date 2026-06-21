@@ -1,0 +1,57 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import LabEmbed from '../../components/astro/LabEmbed.astro';
+import ProjectLinks from '../../components/astro/ProjectLinks.astro';
+import { getGithubMeta } from '../../lib/content';
+import { getLabProject } from '../../lib/relations';
+import MazeVisualizer from '../../components/react/MazeVisualizer.tsx';
+import MqttLive from '../../components/react/MqttLive.tsx';
+
+export async function getStaticPaths() {
+  const labs = await getCollection('labs');
+  return labs.map((lab) => ({ params: { slug: lab.id }, props: { lab } }));
+}
+
+const { lab } = Astro.props;
+const { Content } = await render(lab);
+
+// Islands locais (sem embedUrl) selecionadas por slug. O Astro precisa de uma
+// referência estática para hidratar, então cada uma é renderizada explicitamente.
+const localIsland = !lab.data.embedUrl ? lab.id : undefined;
+
+const project = await getLabProject(lab);
+const repoMeta = lab.data.repo ? (await getGithubMeta()).get(lab.data.repo) : undefined;
+---
+
+<BaseLayout title={lab.data.title} description={lab.data.summary}>
+  <article class="prose-page">
+    <header class="mb-6">
+      <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">{lab.data.title}</h1>
+      <p class="mt-2 text-lg text-muted">{lab.data.summary}</p>
+      <div class="mt-4">
+        <ProjectLinks
+          repoUrl={repoMeta?.url}
+          writeupSlug={undefined}
+        />
+        {project && (
+          <a class="btn mt-2" href={`/projetos/${project.id}`}>← Sobre o projeto {project.data.title}</a>
+        )}
+      </div>
+    </header>
+
+    <div class="my-6 not-prose">
+      {localIsland === 'maze-solver' && <MazeVisualizer client:visible />}
+      {localIsland === 'mqtt-live' && <MqttLive client:visible />}
+      {lab.data.embedUrl && <LabEmbed embedUrl={lab.data.embedUrl} poster={lab.data.poster} title={lab.data.title} />}
+    </div>
+
+    <div class="article-body">
+      <Content />
+    </div>
+
+    <footer class="mt-12 border-t border-border pt-6 text-sm text-muted">
+      <a href="/labs" class="no-underline">← Todos os labs</a>
+    </footer>
+  </article>
+</BaseLayout>

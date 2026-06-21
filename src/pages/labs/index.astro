@@ -1,0 +1,40 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const labs = (await getCollection('labs')).sort((a, b) =>
+  a.data.status === b.data.status ? 0 : a.data.status === 'live' ? -1 : 1,
+);
+---
+
+<BaseLayout title="Labs" description="Demos interativos: visualizadores, simulações e telemetria ao vivo.">
+  <header class="mb-8 max-w-2xl">
+    <h1 class="text-3xl font-bold tracking-tight">Labs</h1>
+    <p class="mt-2 text-muted">
+      Demos interativos. Cada card abre o demo ao clique — sem cold start na
+      entrada da página.
+    </p>
+  </header>
+
+  <div class="grid gap-4 sm:grid-cols-2">
+    {
+      labs.map((lab) => (
+        <a href={`/labs/${lab.id}`} class="card group block no-underline hover:border-accent/50">
+          <div
+            class="mb-3 aspect-video rounded-lg border border-border bg-bg bg-cover bg-center"
+            style={`background-image: url(${lab.data.poster});`}
+          />
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-lg font-semibold tracking-tight text-fg group-hover:text-accent">
+              {lab.data.title}
+            </h3>
+            <span class:list={['badge', lab.data.status === 'live' ? 'border-accent/40 text-accent' : 'border-border text-muted']}>
+              {lab.data.status === 'live' ? 'live' : 'wip'}
+            </span>
+          </div>
+          <p class="mt-1 text-sm text-muted">{lab.data.summary}</p>
+        </a>
+      ))
+    }
+  </div>
+</BaseLayout>

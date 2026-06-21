@@ -1,0 +1,33 @@
+---
+// Mostra cada ação apenas quando o destino correspondente existe.
+interface Props {
+  repoUrl?: string;
+  demoSlug?: string;
+  writeupSlug?: string;
+}
+const { repoUrl, demoSlug, writeupSlug } = Astro.props;
+---
+
+<div class="flex flex-wrap gap-2">
+  {
+    repoUrl && (
+      <a class="btn" href={repoUrl} target="_blank" rel="noopener noreferrer">
+        <span aria-hidden="true">{'</>'}</span> Ver código
+      </a>
+    )
+  }
+  {
+    demoSlug && (
+      <a class="btn" href={`/labs/${demoSlug}`}>
+        <span aria-hidden="true">▶</span> Ver demo
+      </a>
+    )
+  }
+  {
+    writeupSlug && (
+      <a class="btn" href={`/escritos/${writeupSlug}`}>
+        <span aria-hidden="true">✎</span> Ler sobre
+      </a>
+    )
+  }
+</div>

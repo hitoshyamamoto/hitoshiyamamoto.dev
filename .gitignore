@@ -1,0 +1,30 @@
+# build output
+dist/
+.output/
+
+# astro
+.astro/
+
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# environment
+.env
+.env.production
+.env.local
+
+# macos / editor
+.DS_Store
+*.local
+.vscode/*
+!.vscode/extensions.json
+
+# fora do repositório (config de ferramentas e notas internas)
+.claude/
+ARQUITETURA.md

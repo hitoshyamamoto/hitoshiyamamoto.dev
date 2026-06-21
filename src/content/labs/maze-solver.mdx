@@ -1,0 +1,22 @@
+---
+title: "Visualizador de labirintos"
+summary: "Compare BFS, DFS, Dijkstra, A* e greedy resolvendo o mesmo labirinto."
+kind: static
+poster: /og/maze-solver.svg
+repo: maze-solver
+relatedProject: maze-solver
+status: live
+---
+
+Este Lab roda inteiramente no seu navegador. Escolha um algoritmo e veja as
+células que ele explora antes de encontrar a saída; gere um novo labirinto para
+comparar o comportamento de cada estratégia sobre o mesmo problema.
+
+- **BFS** garante o caminho mais curto, mas explora largo.
+- **DFS** mergulha fundo — rápido às vezes, terrível em outras.
+- **Dijkstra** é BFS com custo (aqui, custo uniforme).
+- **A\*** usa a heurística de Manhattan para ir direto ao ponto.
+- **Greedy** segue só a heurística — rápido, mas pode errar o ótimo.
+
+Observe a métrica de **eficiência** (caminho ÷ explorados): quanto maior, menos
+o algoritmo desperdiçou.

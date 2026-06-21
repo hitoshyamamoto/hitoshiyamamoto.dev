@@ -1,0 +1,35 @@
+---
+title: "Construindo o soapbar"
+kind: article
+publishedAt: 2025-03-05
+summary: "Bastidores da lib que resolve SOAP RPC/encoded onde Zeep e Spyne desistem."
+tags: ["python", "soap", "witsml"]
+project: soapbar
+lang: pt
+---
+
+O `soapbar` nasceu de uma frustração concreta: integrar com servidores WITSML
+1.4.1.1 usando clientes SOAP modernos do Python simplesmente não funcionava.
+
+## O problema: RPC/encoded
+
+A maioria das libs SOAP atuais (Zeep à frente) assume o estilo **document/literal**,
+que é o que o WSDL moderno usa. Mas muitos servidores legados — WITSML, certos
+endpoints de NF-e e do VIES — ainda falam **RPC/encoded**, um estilo mais antigo
+com regras de serialização diferentes (referências multi-ref, `soapenc:arrayType`,
+tipos inline). O Zeep levanta as mãos; o Spyne é mais de servidor que de cliente.
+
+## A decisão de design
+
+Em vez de tentar generalizar, o `soapbar` assume o RPC/encoded como cidadão de
+primeira classe e gera o envelope na mão quando preciso, validando contra o WSDL
+só onde compensa. Menos mágica, mais controle.
+
+## O que ficou bom
+
+- Envelopes legíveis e depuráveis (você vê o XML que sai).
+- Tratamento explícito de `multiRef`, que é onde quase todo cliente quebra.
+- Zero dependência pesada de runtime.
+
+Se quiser o porquê técnico mais a fundo, há um post complementar no Medium sobre
+o caso específico do WITSML 1.4.1.1.

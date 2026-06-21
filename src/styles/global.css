@@ -1,0 +1,125 @@
+@import 'tailwindcss';
+
+/* Tema controlado por classe `.dark` no <html>, alternada pelo ThemeToggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Tokens de cor como variáveis CSS para alternar claro/escuro sem recompilar.
+ * `@theme inline` mantém a referência viva: utilitários como `bg-bg` resolvem
+ * para var(--bg) e reagem à troca de tema. Os triplets RGB permitem que os
+ * modificadores de opacidade (ex.: bg-accent/20) usem color-mix.
+ */
+@theme inline {
+  --color-bg: rgb(var(--bg));
+  --color-surface: rgb(var(--surface));
+  --color-border: rgb(var(--border));
+  --color-fg: rgb(var(--fg));
+  --color-muted: rgb(var(--muted));
+  --color-accent: rgb(var(--accent));
+
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  :root {
+    --bg: 250 250 249;
+    --surface: 255 255 255;
+    --border: 231 229 228;
+    --fg: 28 25 23;
+    --muted: 120 113 108;
+    --accent: 13 148 136;
+  }
+
+  .dark {
+    --bg: 12 10 9;
+    --surface: 28 25 23;
+    --border: 41 37 36;
+    --fg: 245 245 244;
+    --muted: 168 162 158;
+    --accent: 45 212 191;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+  }
+
+  a {
+    @apply text-accent underline-offset-2;
+  }
+
+  ::selection {
+    @apply bg-accent/20;
+  }
+
+  /* Animações respeitam a preferência de movimento reduzido do usuário. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-5xl px-4 sm:px-6;
+  }
+
+  .prose-page {
+    @apply mx-auto max-w-[68ch];
+  }
+
+  .card {
+    @apply rounded-xl border border-border bg-surface p-5 transition-colors;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs font-medium;
+  }
+
+  .btn {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium no-underline transition-colors hover:border-accent hover:text-accent;
+  }
+}
+
+/* Tipografia dos artigos nativos — leve, sem plugin externo. */
+.article-body {
+  @apply text-[1.02rem] leading-relaxed;
+}
+.article-body :where(h2) {
+  @apply mt-10 mb-3 text-2xl font-semibold tracking-tight;
+}
+.article-body :where(h3) {
+  @apply mt-8 mb-2 text-xl font-semibold;
+}
+.article-body :where(p, ul, ol) {
+  @apply my-4;
+}
+.article-body :where(ul) {
+  @apply list-disc pl-6;
+}
+.article-body :where(ol) {
+  @apply list-decimal pl-6;
+}
+.article-body :where(code):not(pre code) {
+  @apply rounded bg-border/60 px-1.5 py-0.5 font-mono text-[0.9em];
+}
+.article-body :where(pre) {
+  @apply my-6 overflow-x-auto rounded-xl border border-border p-4 text-sm;
+}
+.article-body :where(blockquote) {
+  @apply my-6 border-l-2 border-accent pl-4 italic text-muted;
+}
+.article-body :where(img) {
+  @apply rounded-xl border border-border;
+}

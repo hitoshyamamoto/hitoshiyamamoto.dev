@@ -1,0 +1,31 @@
+---
+// Selo de origem: "Nativo" (com sabor article/interactive) vs "Medium".
+interface Props {
+  source: 'native' | 'medium';
+  kind?: 'article' | 'interactive';
+}
+const { source, kind } = Astro.props;
+
+const label =
+  source === 'medium'
+    ? 'Medium'
+    : kind === 'interactive'
+      ? 'Interativo'
+      : 'Nativo';
+---
+
+<span
+  class:list={[
+    'badge',
+    source === 'medium'
+      ? 'border-border text-muted'
+      : kind === 'interactive'
+        ? 'border-accent/40 text-accent'
+        : 'border-accent/30 text-fg',
+  ]}
+>
+  {source === 'native' && kind === 'interactive' && (
+    <span aria-hidden="true">▶</span>
+  )}
+  {label}
+</span>
