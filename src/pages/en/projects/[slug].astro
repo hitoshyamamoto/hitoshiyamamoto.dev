@@ -1,0 +1,62 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ProjectLinks from '../../../components/astro/ProjectLinks.astro';
+import { getGithubMeta } from '../../../lib/content';
+import { getProjectRelations } from '../../../lib/relations';
+import { formatDate } from '../../../lib/seo';
+import { useTranslations, path } from '../../../i18n/ui';
+
+const locale = 'en';
+
+export async function getStaticPaths() {
+  const projects = await getCollection('projects', (e) => e.data.lang === 'en');
+  return projects.map((project) => ({ params: { slug: project.data.translationKey }, props: { project } }));
+}
+
+const { project } = Astro.props;
+const t = useTranslations(locale);
+const { Content } = await render(project);
+const meta = project.data.repo ? (await getGithubMeta()).get(project.data.repo) : undefined;
+const { lab, writeup } = await getProjectRelations(project, locale);
+const tk = project.data.translationKey;
+---
+
+<BaseLayout
+  title={project.data.title}
+  description={project.data.summary}
+  alternates={{ pt: path('pt', 'projects', tk), en: path('en', 'projects', tk) }}
+>
+  <article class="prose-page">
+    <header class="mb-6 border-b border-border pb-6">
+      <div class="mb-2 flex flex-wrap gap-1.5 text-xs text-muted">
+        {project.data.tags.map((tag) => <span>#{tag}</span>)}
+      </div>
+      <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">{project.data.title}</h1>
+      <p class="mt-2 text-lg text-muted">{project.data.summary}</p>
+
+      {
+        meta && (
+          <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+            {meta.language && <span>{meta.language}</span>}
+            <span>★ {meta.stars}</span>
+            {meta.lastCommit && <span>{t('project.lastCommit')} {formatDate(new Date(meta.lastCommit), locale)}</span>}
+            {meta.license && <span>{meta.license}</span>}
+          </div>
+        )
+      }
+
+      <div class="mt-5">
+        <ProjectLinks repoUrl={meta?.url} demoSlug={lab?.id} writeupSlug={writeup?.id} />
+      </div>
+    </header>
+
+    <div class="article-body">
+      <Content />
+    </div>
+
+    <footer class="mt-12 border-t border-border pt-6 text-sm text-muted">
+      <a href={path(locale, 'projects')} class="no-underline">{t('projects.all')}</a>
+    </footer>
+  </article>
+</BaseLayout>

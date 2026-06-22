@@ -1,37 +1,74 @@
 ---
 import ThemeToggle from '../react/ThemeToggle.tsx';
+import { getLocaleFromUrl, getRouteKeyFromUrl, useTranslations, path, locales, type RouteKey, type Locale } from '../../i18n/ui';
 
-const links = [
-  { href: '/escritos', label: 'Escritos' },
-  { href: '/projetos', label: 'Projetos' },
-  { href: '/labs', label: 'Labs' },
-  { href: '/sobre', label: 'Sobre' },
+const locale = getLocaleFromUrl(Astro.url);
+const t = useTranslations(locale);
+const currentKey = getRouteKeyFromUrl(Astro.url);
+
+const links: { key: Exclude<RouteKey, 'home'>; label: string }[] = [
+  { key: 'writing', label: t('nav.writing') },
+  { key: 'projects', label: t('nav.projects') },
+  { key: 'labs', label: t('nav.labs') },
+  { key: 'about', label: t('nav.about') },
 ];
 
-const path = Astro.url.pathname;
-const isActive = (href: string) => path === href || path.startsWith(href + '/');
+const pathname = Astro.url.pathname;
+const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+// Seletor de idioma: cada idioma leva à mesma seção (à listagem, se for um post).
+const switchKey: RouteKey = currentKey;
+const langCode = (loc: Locale) => loc.toUpperCase();
 ---
 
 <header class="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur">
   <nav class="container-page flex h-14 items-center justify-between">
-    <a href="/" class="font-mono text-sm font-semibold no-underline tracking-tight">
+    <a href={path(locale, 'home')} class="font-mono text-sm font-semibold no-underline tracking-tight">
       hitoshiyamamoto<span class="text-accent">.dev</span>
     </a>
     <div class="flex items-center gap-1 sm:gap-2">
       {
-        links.map((l) => (
-          <a
-            href={l.href}
-            class:list={[
-              'rounded-md px-2.5 py-1.5 text-sm no-underline transition-colors hover:text-accent',
-              isActive(l.href) ? 'text-fg font-medium' : 'text-muted',
-            ]}
-            aria-current={isActive(l.href) ? 'page' : undefined}
-          >
-            {l.label}
-          </a>
-        ))
+        links.map((l) => {
+          const href = path(locale, l.key);
+          return (
+            <a
+              href={href}
+              class:list={[
+                'rounded-md px-2.5 py-1.5 text-sm no-underline transition-colors hover:text-accent',
+                isActive(href) ? 'text-fg font-medium' : 'text-muted',
+              ]}
+              aria-current={isActive(href) ? 'page' : undefined}
+            >
+              {l.label}
+            </a>
+          );
+        })
       }
+
+      <div
+        class="flex items-center overflow-hidden rounded-md border border-border text-xs font-medium"
+        role="group"
+        aria-label="Idioma / Language"
+      >
+        {
+          locales.map((loc, i) =>
+            loc === locale ? (
+              <span class:list={['px-2 py-1.5 bg-accent/15 text-accent', i > 0 && 'border-l border-border']} aria-current="true">
+                {langCode(loc)}
+              </span>
+            ) : (
+              <a
+                href={path(loc, switchKey)}
+                hreflang={loc}
+                class:list={['px-2 py-1.5 text-muted no-underline transition-colors hover:text-accent', i > 0 && 'border-l border-border']}
+              >
+                {langCode(loc)}
+              </a>
+            ),
+          )
+        }
+      </div>
+
       <ThemeToggle client:load />
     </div>
   </nav>

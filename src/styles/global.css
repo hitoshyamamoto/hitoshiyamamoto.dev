@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
-/* Tema controlado por classe `.dark` no <html>, alternada pelo ThemeToggle. */
-@custom-variant dark (&:where(.dark, .dark *));
+/* Tema controlado por data-theme no <html> (light · dark · coffee), pelo ThemeToggle. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
  * Tokens de cor como variáveis CSS para alternar claro/escuro sem recompilar.
@@ -22,27 +22,42 @@
 }
 
 @layer base {
-  :root {
+  /* Tema claro (padrão): branco e cinza-pedra. */
+  :root,
+  [data-theme='light'] {
     --bg: 250 250 249;
     --surface: 255 255 255;
     --border: 231 229 228;
     --fg: 28 25 23;
     --muted: 120 113 108;
     --accent: 13 148 136;
+    color-scheme: light;
   }
 
-  .dark {
+  /* Tema escuro: o modo dark de fato. */
+  [data-theme='dark'] {
     --bg: 12 10 9;
     --surface: 28 25 23;
     --border: 41 37 36;
     --fg: 245 245 244;
     --muted: 168 162 158;
     --accent: 45 212 191;
+    color-scheme: dark;
+  }
+
+  /* Tema café: bege, marrom e creme (paleta de cafeteria). */
+  [data-theme='coffee'] {
+    --bg: 233 222 206;
+    --surface: 243 234 222;
+    --border: 211 192 168;
+    --fg: 56 43 31;
+    --muted: 128 102 75;
+    --accent: 158 92 47;
+    color-scheme: light;
   }
 
   html {
     scroll-behavior: smooth;
-    color-scheme: light dark;
   }
 
   body {
@@ -92,7 +107,7 @@
   }
 }
 
-/* Tipografia dos artigos nativos — leve, sem plugin externo. */
+/* Tipografia dos artigos nativos: leve, sem plugin externo. */
 .article-body {
   @apply text-[1.02rem] leading-relaxed;
 }
@@ -122,4 +137,16 @@
 }
 .article-body :where(img) {
   @apply rounded-xl border border-border;
+}
+.article-body :where(table) {
+  @apply my-6 block w-full overflow-x-auto border-collapse text-sm;
+}
+.article-body :where(th, td) {
+  @apply border border-border px-3 py-2 text-left align-top;
+}
+.article-body :where(th) {
+  @apply bg-surface font-semibold;
+}
+.article-body :where(td code, th code) {
+  @apply whitespace-nowrap;
 }

@@ -1,4 +1,6 @@
 ---
+import { getLocaleFromUrl, useTranslations, path } from '../../i18n/ui';
+
 // Mostra cada ação apenas quando o destino correspondente existe.
 interface Props {
   repoUrl?: string;
@@ -6,27 +8,30 @@ interface Props {
   writeupSlug?: string;
 }
 const { repoUrl, demoSlug, writeupSlug } = Astro.props;
+
+const locale = getLocaleFromUrl(Astro.url);
+const t = useTranslations(locale);
 ---
 
 <div class="flex flex-wrap gap-2">
   {
     repoUrl && (
       <a class="btn" href={repoUrl} target="_blank" rel="noopener noreferrer">
-        <span aria-hidden="true">{'</>'}</span> Ver código
+        <span aria-hidden="true">{'</>'}</span> {t('links.code')}
       </a>
     )
   }
   {
     demoSlug && (
-      <a class="btn" href={`/labs/${demoSlug}`}>
-        <span aria-hidden="true">▶</span> Ver demo
+      <a class="btn" href={path(locale, 'labs', demoSlug)}>
+        <span aria-hidden="true">▶</span> {t('links.demo')}
       </a>
     )
   }
   {
     writeupSlug && (
-      <a class="btn" href={`/escritos/${writeupSlug}`}>
-        <span aria-hidden="true">✎</span> Ler sobre
+      <a class="btn" href={path(locale, 'writing', writeupSlug)}>
+        <span aria-hidden="true">✎</span> {t('links.read')}
       </a>
     )
   }

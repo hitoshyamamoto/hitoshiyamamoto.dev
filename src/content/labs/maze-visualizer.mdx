@@ -1,0 +1,23 @@
+---
+title: "Maze visualizer"
+summary: "Compare BFS, DFS, Dijkstra, A* and greedy solving the same maze."
+kind: static
+poster: /og/maze-solver.svg
+relatedProject: maze-solver
+status: live
+lang: en
+translationKey: maze
+---
+
+This lab runs entirely in your browser. Pick an algorithm and watch the cells it
+explores before reaching the exit; generate a new maze to compare how each
+strategy behaves on the same problem.
+
+- **BFS** guarantees the shortest path, but explores wide.
+- **DFS** dives deep: fast sometimes, terrible at others.
+- **Dijkstra** is BFS with cost (here, uniform cost).
+- **A\*** uses the Manhattan heuristic to head straight for the goal.
+- **Greedy** follows the heuristic alone: fast, but can miss the optimum.
+
+Watch the **efficiency** metric (path ÷ explored): the higher it is, the less the
+algorithm wasted.

@@ -1,0 +1,46 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostCard from '../../components/astro/PostCard.astro';
+import ProjectCard from '../../components/astro/ProjectCard.astro';
+import { getUnifiedFeed } from '../../lib/content';
+import { getCollection } from 'astro:content';
+import { useTranslations, path } from '../../i18n/ui';
+
+const locale = 'en';
+const t = useTranslations(locale);
+const feed = (await getUnifiedFeed(locale)).slice(0, 4);
+const projects = (await getCollection('projects', (e) => e.data.lang === 'en'))
+  .sort((a, b) => Number(b.data.highlight) - Number(a.data.highlight))
+  .slice(0, 3);
+---
+
+<BaseLayout>
+  <section class="mx-auto max-w-2xl py-8 text-center sm:py-14">
+    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">{t('site.name')}</h1>
+    <p class="mt-4 text-lg text-muted">{t('site.tagline')}</p>
+    <div class="mt-6 flex justify-center gap-3">
+      <a class="btn" href={path(locale, 'projects')}>{t('home.cta.projects')}</a>
+      <a class="btn" href={path(locale, 'about')}>{t('home.cta.about')}</a>
+    </div>
+  </section>
+
+  <section class="mt-8">
+    <div class="mb-4 flex items-baseline justify-between">
+      <h2 class="text-xl font-semibold tracking-tight">{t('home.recent')}</h2>
+      <a href={path(locale, 'writing')} class="text-sm no-underline">{t('common.seeAll')}</a>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      {feed.map((item) => <PostCard item={item} />)}
+    </div>
+  </section>
+
+  <section class="mt-12">
+    <div class="mb-4 flex items-baseline justify-between">
+      <h2 class="text-xl font-semibold tracking-tight">{t('home.featured')}</h2>
+      <a href={path(locale, 'projects')} class="text-sm no-underline">{t('common.seeAll')}</a>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {projects.map((project) => <ProjectCard project={project} />)}
+    </div>
+  </section>
+</BaseLayout>

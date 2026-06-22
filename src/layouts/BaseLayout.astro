@@ -1,17 +1,36 @@
 ---
 import '../styles/global.css';
+import 'katex/dist/katex.min.css';
 import Header from '../components/astro/Header.astro';
 import Footer from '../components/astro/Footer.astro';
 import { buildSeo, type SeoInput, SITE } from '../lib/seo';
+import { getLocaleFromUrl, getRouteKeyFromUrl, localeMeta, useTranslations, path, locales, defaultLocale, type Locale } from '../i18n/ui';
 
-interface Props extends SeoInput {}
+interface Props extends SeoInput {
+  /** Mapa idioma → caminho da versão equivalente desta página (para hreflang). */
+  alternates?: Partial<Record<Locale, string>>;
+}
+
+const locale = getLocaleFromUrl(Astro.url);
+const { htmlLang } = localeMeta[locale];
+const ogLocale = htmlLang.replace('-', '_');
+const t = useTranslations(locale);
 
 const seo = buildSeo(Astro.props);
+// Sem título de página (home), usa o título do site no idioma corrente.
+if (!Astro.props.title) seo.title = t('site.fulltitle');
 const canonical = Astro.props.canonical ?? new URL(Astro.url.pathname, SITE.url).toString();
+
+// hreflang: usa as alternativas explícitas (páginas de detalhe) ou deriva pela
+// seção (home/listagens/sobre têm o mesmo slug em todos os idiomas).
+const routeKey = getRouteKeyFromUrl(Astro.url);
+const alternates =
+  Astro.props.alternates ?? Object.fromEntries(locales.map((l) => [l, path(l, routeKey)]));
+const abs = (p: string) => new URL(p, SITE.url).toString();
 ---
 
 <!doctype html>
-<html lang="pt-BR" class="dark">
+<html lang={htmlLang} data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -22,6 +41,14 @@ const canonical = Astro.props.canonical ?? new URL(Astro.url.pathname, SITE.url)
     <meta name="description" content={seo.description} />
     <link rel="canonical" href={canonical} />
 
+    <!-- Alternativas por idioma (hreflang) -->
+    {
+      Object.entries(alternates).map(([loc, p]) => (
+        <link rel="alternate" hreflang={localeMeta[loc as Locale].htmlLang} href={abs(p)} />
+      ))
+    }
+    {alternates[defaultLocale] && <link rel="alternate" hreflang="x-default" href={abs(alternates[defaultLocale]!)} />}
+
     <!-- Open Graph -->
     <meta property="og:type" content={seo.type} />
     <meta property="og:title" content={seo.title} />
@@ -29,7 +56,7 @@ const canonical = Astro.props.canonical ?? new URL(Astro.url.pathname, SITE.url)
     <meta property="og:image" content={seo.image} />
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content={SITE.name} />
-    <meta property="og:locale" content={SITE.locale} />
+    <meta property="og:locale" content={ogLocale} />
     {seo.publishedAt && <meta property="article:published_time" content={seo.publishedAt} />}
 
     <!-- Twitter / X -->
@@ -42,12 +69,16 @@ const canonical = Astro.props.canonical ?? new URL(Astro.url.pathname, SITE.url)
     <link rel="alternate" type="application/rss+xml" title={SITE.name} href="/rss.xml" />
     <link rel="sitemap" href="/sitemap-index.xml" />
 
-    <!-- Evita flash de tema: aplica preferência salva antes de pintar. -->
+    <!-- Evita flash de tema: aplica a preferência salva antes de pintar. -->
     <script is:inline>
       (() => {
         const saved = localStorage.getItem('theme');
-        const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.classList.toggle('dark', dark);
+        const theme = ['light', 'dark', 'coffee'].includes(saved)
+          ? saved
+          : matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        document.documentElement.dataset.theme = theme;
       })();
     </script>
   </head>

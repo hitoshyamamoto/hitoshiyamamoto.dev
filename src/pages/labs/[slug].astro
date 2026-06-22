@@ -3,46 +3,49 @@ import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import LabEmbed from '../../components/astro/LabEmbed.astro';
 import ProjectLinks from '../../components/astro/ProjectLinks.astro';
-import { getGithubMeta } from '../../lib/content';
+import { getGithubMeta, getLabAlternates } from '../../lib/content';
 import { getLabProject } from '../../lib/relations';
+import { useTranslations, path } from '../../i18n/ui';
 import MazeVisualizer from '../../components/react/MazeVisualizer.tsx';
 import MqttLive from '../../components/react/MqttLive.tsx';
 
+const locale = 'pt';
+
 export async function getStaticPaths() {
-  const labs = await getCollection('labs');
+  const labs = await getCollection('labs', (e) => e.data.lang === 'pt');
   return labs.map((lab) => ({ params: { slug: lab.id }, props: { lab } }));
 }
 
 const { lab } = Astro.props;
+const t = useTranslations(locale);
 const { Content } = await render(lab);
 
-// Islands locais (sem embedUrl) selecionadas por slug. O Astro precisa de uma
-// referência estática para hidratar, então cada uma é renderizada explicitamente.
-const localIsland = !lab.data.embedUrl ? lab.id : undefined;
+// Island local selecionada pela translationKey (estável entre idiomas).
+const islandKey = !lab.data.embedUrl ? lab.data.translationKey : undefined;
 
 const project = await getLabProject(lab);
 const repoMeta = lab.data.repo ? (await getGithubMeta()).get(lab.data.repo) : undefined;
+const alternates = await getLabAlternates(lab);
 ---
 
-<BaseLayout title={lab.data.title} description={lab.data.summary}>
+<BaseLayout title={lab.data.title} description={lab.data.summary} alternates={alternates}>
   <article class="prose-page">
     <header class="mb-6">
       <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">{lab.data.title}</h1>
       <p class="mt-2 text-lg text-muted">{lab.data.summary}</p>
       <div class="mt-4">
-        <ProjectLinks
-          repoUrl={repoMeta?.url}
-          writeupSlug={undefined}
-        />
+        <ProjectLinks repoUrl={repoMeta?.url} writeupSlug={undefined} />
         {project && (
-          <a class="btn mt-2" href={`/projetos/${project.id}`}>← Sobre o projeto {project.data.title}</a>
+          <a class="btn mt-2" href={path(locale, 'projects', project.data.translationKey)}>
+            ← {t('project.about')}: {project.data.title}
+          </a>
         )}
       </div>
     </header>
 
     <div class="my-6 not-prose">
-      {localIsland === 'maze-solver' && <MazeVisualizer client:visible />}
-      {localIsland === 'mqtt-live' && <MqttLive client:visible />}
+      {islandKey === 'maze' && <MazeVisualizer client:visible />}
+      {islandKey === 'mqtt' && <MqttLive client:visible />}
       {lab.data.embedUrl && <LabEmbed embedUrl={lab.data.embedUrl} poster={lab.data.poster} title={lab.data.title} />}
     </div>
 
@@ -51,7 +54,7 @@ const repoMeta = lab.data.repo ? (await getGithubMeta()).get(lab.data.repo) : un
     </div>
 
     <footer class="mt-12 border-t border-border pt-6 text-sm text-muted">
-      <a href="/labs" class="no-underline">← Todos os labs</a>
+      <a href={path(locale, 'labs')} class="no-underline">{t('labs.all')}</a>
     </footer>
   </article>
 </BaseLayout>

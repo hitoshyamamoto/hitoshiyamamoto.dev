@@ -1,0 +1,17 @@
+---
+title: "Live MQTT telemetry"
+summary: "A real-time telemetry stream rendered by a local island."
+kind: realtime
+poster: /og/mqtt-live.svg
+status: wip
+lang: en
+translationKey: mqtt
+---
+
+A `kind: realtime` demo served by a local React island. By default it simulates a
+telemetry stream on the client itself (no broker, no cold start). To wire it to a
+real MQTT broker over WebSocket, point the component at a `wss://` endpoint,
+ideally behind a serverless function when credentials must stay hidden.
+
+It honors `prefers-reduced-motion`: with reduced motion, the continuous animation
+is disabled.

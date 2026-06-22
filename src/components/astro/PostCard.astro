@@ -1,26 +1,24 @@
 ---
 import SourceBadge from './SourceBadge.astro';
 import { formatDate } from '../../lib/seo';
+import { getLocaleFromUrl } from '../../i18n/ui';
 import type { FeedItem } from '../../lib/content';
 
 interface Props {
   item: FeedItem;
 }
 const { item } = Astro.props;
+const locale = getLocaleFromUrl(Astro.url);
 const target = item.external ? '_blank' : undefined;
 const rel = item.external ? 'noopener noreferrer' : undefined;
+const showLanguages = item.languages.length > 0;
 ---
 
 <article class="card hover:border-accent/50">
   <a href={item.href} target={target} rel={rel} class="group block no-underline">
     <div class="flex items-center justify-between gap-3 text-sm text-muted">
-      <SourceBadge
-        source={item.source}
-        kind={item.source === 'native' ? item.kind : undefined}
-      />
-      <time datetime={item.publishedAt.toISOString()}>
-        {formatDate(item.publishedAt)}
-      </time>
+      <SourceBadge source={item.source} kind={item.source === 'native' ? item.kind : undefined} />
+      <time datetime={item.publishedAt.toISOString()}>{formatDate(item.publishedAt, locale)}</time>
     </div>
     <h3 class="mt-2 text-lg font-semibold tracking-tight text-fg group-hover:text-accent">
       {item.title}
@@ -30,11 +28,29 @@ const rel = item.external ? 'noopener noreferrer' : undefined;
     {
       item.tags.length > 0 && (
         <div class="mt-3 flex flex-wrap gap-1.5">
-          {item.tags.slice(0, 4).map((t) => (
-            <span class="text-xs text-muted">#{t}</span>
+          {item.tags.slice(0, 4).map((tag) => (
+            <span class="text-xs text-muted">#{tag}</span>
           ))}
         </div>
       )
     }
   </a>
+
+  {
+    showLanguages && (
+      <div class="mt-3 flex items-center gap-1.5 border-t border-border pt-3">
+        {item.languages.map((l) =>
+          l.current ? (
+            <span class="badge border-accent/40 text-accent" aria-current="true">
+              {l.label}
+            </span>
+          ) : (
+            <a href={l.href} hreflang={l.lang} class="badge border-border text-muted no-underline hover:border-accent hover:text-accent">
+              {l.label}
+            </a>
+          ),
+        )}
+      </div>
+    )
+  }
 </article>

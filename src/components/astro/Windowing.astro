@@ -1,0 +1,57 @@
+---
+// Os três relógios do janelamento: amostragem, janela e passo.
+const xL = 24;
+const xR = 616;
+const SAMPLES = 24;
+const sx = (k: number) => xL + (k / SAMPLES) * (xR - xL);
+
+// janelas deslizantes: largura 8 amostras, passo 6
+const WIN = 8;
+const STRIDE = 6;
+const windows = [2, 8, 14, 20].map((start) => ({ start, end: start + WIN }));
+
+const rowSample = 56;
+const rowWin = 110;
+const rowStat = 188;
+---
+
+<figure class="not-prose my-6 rounded-xl border border-border bg-surface p-4">
+  <svg viewBox="0 0 640 230" width="100%" role="img" aria-label="Os três relógios do janelamento: amostragem, janela e cadência de decisão." class="rounded-lg bg-bg">
+    <!-- linha 1: amostragem -->
+    <text x={xL} y={rowSample - 18} class="fill-muted" font-size="11">1 · amostragem (Δt)</text>
+    <line x1={xL} y1={rowSample} x2={xR} y2={rowSample} class="stroke-border" stroke-width="1" />
+    {Array.from({ length: SAMPLES + 1 }).map((_, k) => <circle cx={sx(k)} cy={rowSample} r={2.4} class="fill-accent/70" />)}
+    <line x1={sx(0)} y1={rowSample + 8} x2={sx(1)} y2={rowSample + 8} class="stroke-muted" stroke-width="1" />
+    <text x={(sx(0) + sx(1)) / 2} y={rowSample + 20} text-anchor="middle" class="fill-muted" font-size="9">Δt</text>
+
+    <!-- linha 2: janelas deslizantes -->
+    <text x={xL} y={rowWin - 14} class="fill-muted" font-size="11">2 · janela (W) e passo (S)</text>
+    {
+      windows.map((w, i) => (
+        <rect
+          x={sx(w.start)}
+          y={rowWin - 6 + i * 3}
+          width={sx(w.end) - sx(w.start)}
+          height={26}
+          rx={4}
+          class="fill-accent/10 stroke-accent/50"
+          stroke-width="1"
+        />
+      ))
+    }
+    <line x1={sx(2)} y1={rowWin + 34} x2={sx(2 + WIN)} y2={rowWin + 34} class="stroke-accent" stroke-width="1.5" />
+    <text x={(sx(2) + sx(2 + WIN)) / 2} y={rowWin + 45} text-anchor="middle" class="fill-accent" font-size="9">W</text>
+    <line x1={sx(2)} y1={rowWin + 52} x2={sx(2 + STRIDE)} y2={rowWin + 52} class="stroke-muted" stroke-width="1.5" />
+    <text x={(sx(2) + sx(2 + STRIDE)) / 2} y={rowWin + 63} text-anchor="middle" class="fill-muted" font-size="9">S</text>
+
+    <!-- linha 3: uma decisão por passo -->
+    <text x={xL} y={rowStat - 12} class="fill-muted" font-size="11">3 · cadência: 1 SPE/T² por janela</text>
+    <line x1={xL} y1={rowStat} x2={xR} y2={rowStat} class="stroke-border" stroke-width="1" />
+    {windows.map((w) => <circle cx={sx(w.end)} cy={rowStat} r={4} class="fill-emerald-500" />)}
+  </svg>
+  <figcaption class="mt-3 text-xs text-muted">
+    Três relógios independentes: a <strong>amostragem</strong> Δt (com que frequência o dado nasce), a
+    <strong> janela</strong> W (quanto histórico entra numa decisão) e o <strong>passo</strong> S (de quanto em
+    quanto tempo sai uma decisão). Cada um se escolhe por um critério diferente.
+  </figcaption>
+</figure>

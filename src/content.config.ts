@@ -14,6 +14,8 @@ const posts = defineCollection({
     project: z.string().optional(),
     draft: z.boolean().default(false),
     lang: z.enum(['pt', 'en']).default('pt'),
+    // Chave compartilhada entre traduções do mesmo post (liga PT ↔ EN).
+    translationKey: z.string().optional(),
   }),
 });
 
@@ -36,13 +38,19 @@ const mediumPosts = defineCollection({
 const projects = defineCollection({
   loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/projects' }),
   schema: z.object({
-    repo: z.string(),
+    // `repo` opcional: um projeto pode existir sem repositório público (sem
+    // metadados do GitHub e sem botão "Ver código").
+    repo: z.string().optional(),
     title: z.string(),
     summary: z.string(),
     highlight: z.boolean().default(false),
     demo: z.string().optional(),
     writeup: z.string().optional(),
     tags: z.array(z.string()).default([]),
+    lang: z.enum(['pt', 'en']).default('pt'),
+    // Chave estável e idioma-neutra; é o slug público (/projetos/<translationKey>)
+    // e liga as traduções PT ↔ EN. Referenciada por posts (project) e labs.
+    translationKey: z.string(),
   }),
 });
 
@@ -59,6 +67,9 @@ const labs = defineCollection({
     repo: z.string().optional(),
     relatedProject: z.string().optional(),
     status: z.enum(['live', 'wip']).default('live'),
+    lang: z.enum(['pt', 'en']).default('pt'),
+    // Chave estável compartilhada entre traduções (liga PT ↔ EN e seleciona a island).
+    translationKey: z.string().optional(),
   }),
 });
 

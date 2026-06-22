@@ -1,32 +1,41 @@
 import { useEffect, useState } from 'react';
 
-/** Island minúscula: alterna claro/escuro e persiste em localStorage. */
+type Theme = 'light' | 'dark' | 'coffee';
+
+// Ciclo de temas; o ícone mostra o tema ATUAL.
+const ORDER: Theme[] = ['light', 'dark', 'coffee'];
+const ICON: Record<Theme, string> = { light: '☀', dark: '☾', coffee: '☕' };
+const LABEL: Record<Theme, string> = { light: 'claro', dark: 'escuro', coffee: 'café' };
+
+/** Alterna entre os temas (claro · escuro · café) e persiste em localStorage. */
 export default function ThemeToggle() {
-  const [dark, setDark] = useState(true);
+  const [theme, setTheme] = useState<Theme>('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    setDark(document.documentElement.classList.contains('dark'));
+    const current = document.documentElement.dataset.theme as Theme | undefined;
+    setTheme(current ?? 'dark');
   }, []);
 
-  function toggle() {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
+  function cycle() {
+    const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('theme', next);
   }
+
+  const nextTheme = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
 
   return (
     <button
       type="button"
-      onClick={toggle}
-      aria-label={dark ? 'Ativar tema claro' : 'Ativar tema escuro'}
-      title={dark ? 'Tema claro' : 'Tema escuro'}
+      onClick={cycle}
+      aria-label={`Tema atual: ${LABEL[theme]}. Mudar para ${LABEL[nextTheme]}.`}
+      title={`Tema: ${LABEL[theme]}`}
       className="rounded-md border border-border px-2 py-1.5 text-sm text-muted transition-colors hover:border-accent hover:text-accent"
     >
-      {/* Evita mismatch de hidratação antes de ler o estado real. */}
-      <span aria-hidden="true">{mounted ? (dark ? '☀' : '☾') : '☾'}</span>
+      <span aria-hidden="true">{mounted ? ICON[theme] : '☾'}</span>
     </button>
   );
 }

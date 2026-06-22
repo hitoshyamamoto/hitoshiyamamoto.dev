@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import LabCard from '../../../components/astro/LabCard.astro';
+import { getCollection } from 'astro:content';
+import { useTranslations } from '../../../i18n/ui';
+
+const locale = 'en';
+const t = useTranslations(locale);
+const labs = (await getCollection('labs', (e) => e.data.lang === locale)).sort((a, b) =>
+  a.data.status === b.data.status ? 0 : a.data.status === 'live' ? -1 : 1,
+);
+---
+
+<BaseLayout title={t('labs.title')} description={t('labs.intro')}>
+  <header class="mb-8 max-w-2xl">
+    <h1 class="text-3xl font-bold tracking-tight">{t('labs.title')}</h1>
+    <p class="mt-2 text-muted">{t('labs.intro')}</p>
+  </header>
+
+  <div class="grid gap-4 sm:grid-cols-2">
+    {labs.map((lab) => <LabCard lab={lab} />)}
+  </div>
+</BaseLayout>

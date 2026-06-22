@@ -4,14 +4,20 @@ import { useEffect, useRef, useState } from 'react';
  * Demo de telemetria em tempo real (island local, sem cold start).
  *
  * Por ora simula o stream no cliente. Para dados reais, troque o gerador por
- * uma conexão MQTT sobre WebSocket (mqtt.js) — atrás de uma função serverless
+ * uma conexão MQTT sobre WebSocket (mqtt.js), atrás de uma função serverless
  * quando a credencial do broker não puder ir para o cliente.
  *
  * Honra prefers-reduced-motion pausando a atualização contínua.
  */
 const MAX_POINTS = 60;
 
-export default function MqttLive() {
+const STR = {
+  pt: { aria: 'Gráfico de telemetria ao vivo', pause: '⏸ Pausar', resume: '▶ Retomar', reduced: 'animação desativada (movimento reduzido)' },
+  en: { aria: 'Live telemetry chart', pause: '⏸ Pause', resume: '▶ Resume', reduced: 'animation disabled (reduced motion)' },
+};
+
+export default function MqttLive({ lang = 'pt' }: { lang?: 'pt' | 'en' }) {
+  const t = STR[lang];
   const [points, setPoints] = useState<number[]>([]);
   const [running, setRunning] = useState(true);
   const reduced = usePrefersReducedMotion();
@@ -50,11 +56,11 @@ export default function MqttLive() {
           telemetria/sensor-01
         </span>
         <span className="font-mono text-muted">
-          {last != null ? (last * 100).toFixed(1) : '—'} %
+          {last != null ? (last * 100).toFixed(1) : 'n/d'} %
         </span>
       </div>
 
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Gráfico de telemetria ao vivo" className="rounded-lg bg-bg">
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t.aria} className="rounded-lg bg-bg">
         <path d={path} fill="none" stroke="currentColor" className="text-accent" strokeWidth={2} />
         {last != null && (
           <circle cx={W} cy={H - last * H} r={3} className="fill-accent" />
@@ -68,11 +74,9 @@ export default function MqttLive() {
           className="btn"
           disabled={reduced}
         >
-          {running ? '⏸ Pausar' : '▶ Retomar'}
+          {running ? t.pause : t.resume}
         </button>
-        {reduced && (
-          <span className="text-xs text-muted">animação desativada (movimento reduzido)</span>
-        )}
+        {reduced && <span className="text-xs text-muted">{t.reduced}</span>}
       </div>
     </div>
   );

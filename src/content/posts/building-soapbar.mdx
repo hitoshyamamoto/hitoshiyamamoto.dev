@@ -1,0 +1,373 @@
+---
+title: "Building soapbar: modern SOAP in Python, from legacy to security"
+kind: interactive
+publishedAt: 2026-06-21
+summary: "The architecture decisions behind soapbar: why a single Python library for SOAP client and server, the five binding styles, real security, and the legacy cases (WITSML, NF-e, VIES), with the verified state of the ecosystem in 2026."
+tags: ["python", "soap", "witsml", "nfe", "security"]
+project: soapbar
+lang: en
+translationKey: soapbar
+---
+
+import EnvelopeComparator from '../../components/react/EnvelopeComparator.tsx';
+import SoapArchitecture from '../../components/astro/SoapArchitecture.astro';
+import NfeSigningFlow from '../../components/astro/NfeSigningFlow.astro';
+
+SOAP (Simple Object Access Protocol) is not a new architectural choice in 2026. It
+is an **integration obligation**. Government bodies, tax systems, and industrial
+equipment expose their interfaces over SOAP, and anyone who needs to consume or serve
+them in Python runs into an ecosystem of partial libraries: each solves a piece of
+the problem, none solves the whole. `soapbar` was built to close that gap. This
+article documents the architecture decisions behind it and the data that supports
+them, all verifiable, with sources cited along the way.
+
+## 1. The concrete problem: WITSML 1.4.1.1
+
+The starting point was a specific integration: consuming a **WITSML 1.4.1.1** server.
+WITSML is the SOAP protocol the oil and gas industry uses to move well data; version
+1.4.1.1 exposes the *STORE API* (operations `WMLS_GetFromStore`, `WMLS_AddToStore`,
+and others). The standard tool for consuming SOAP in Python is
+[zeep](https://docs.python-zeep.org/). The obvious code is this:
+
+```python
+import zeep
+
+client = zeep.Client("https://witsml-server/store?wsdl")
+client.service.WMLS_GetFromStore(WMLtypeIn="well", QueryIn=query, OptionsIn="")
+```
+
+The result is a deserialization failure. The cause is explicit and auditable: the
+WSDL (Web Services Description Language) of WITSML 1.4.1.1 declares `style="rpc"` and
+`use="encoded"`, that is, **RPC/encoded**, the serialization described in Section 5
+of the SOAP 1.1 specification. zeep is designed and optimized for
+**document/literal**, the style of modern SOAP. Three mechanisms of RPC/encoded
+explain the failure, and it is worth naming them one by one:
+
+1. **Inline types:** each value carries an `xsi:type` attribute declaring its type in
+   the envelope itself (for example, `xsi:type="xsd:int"`).
+2. **Encoded arrays:** collections are declared by the `soapenc:arrayType` attribute,
+   which describes the type and dimension of the array.
+3. **Shared references (multiRef):** objects referenced by `href`/`id`, as a graph,
+   instead of serialized inline.
+
+zeep has had multiRef support since version 2.0.0 (2017), but it is **partial**: in
+real RPC/encoded responses, accessors referenced by `href` can come back incomplete.
+The two historical alternatives carry an explicit cost: (a) the `suds` library, in
+the maintained `suds-community` fork, implements RPC/encoded correctly, but is a
+**pure client**, with an older interface, and covers neither server nor security; or
+(b) building the XML envelope by hand with `lxml`, which pushes all the serialization
+complexity into application code. `soapbar` is the deliberate refusal of both.
+
+## 2. The state of the Python SOAP ecosystem (June 2026)
+
+The gap is not the absence of RPC/encoded support: `suds-community` implements it.
+The gap is **combined coverage**: no single library brings together, at the same
+time, client and server, the legacy styles, security, and support for current Python
+versions. The table consolidates the verified state in June 2026, with the version
+and compatibility data taken directly from the official PyPI metadata:
+
+| Capability | soapbar | zeep | spyne | suds-community |
+|---|:---:|:---:|:---:|:---:|
+| SOAP client | Yes | Yes | Secondary | Yes |
+| SOAP server | Yes | No | Yes | No |
+| RPC/encoded + multiRef | Yes | Partial | No | Yes |
+| WS-Security (signing and encryption) | Yes | Partial | No | No |
+| Declared size/depth limits | Yes | No | No | No |
+| MTOM/XOP | Yes | Partial | Yes | No |
+| Latest version (date) | 0.12.1 (Jun 2026) | 4.3.3 (Jun 2026) | 2.14.0 (Feb 2022) | 1.2.0 (Aug 2024) |
+| Declared Python (PyPI) | 3.10 to 3.14 | 3.10 to 3.14 | up to 3.10 | 3.7 to 3.10 |
+
+The version and Python rows come from the official PyPI metadata; the capability rows
+reflect the official documentation and source code of each project, consulted in June
+2026. Library by library, the reading is as follows:
+
+- **zeep**: client only, no server. WS-Security is **partial** (it covers
+  UsernameToken and signing/encryption via `xmlsec`, but not the full profile) and
+  MTOM is **experimental** (it receives multipart responses; sending is not native).
+  It is optimized for document/literal, with only partial RPC/encoded support.
+  Actively maintained (version 4.3.3, June 2026) and declares Python 3.10 to 3.14.
+- **spyne**: primarily a **server** framework; a client exists, but it is secondary.
+  The latest version is 2.14.0, from **February 2022** (more than four years without
+  a release). It does not declare `Requires-Python` and its *classifiers* go **only up
+  to Python 3.10** (the library still lists Python 2.7). On Python 3.11 or higher,
+  this is officially unsupported territory. As for capabilities, the spyne core emits
+  only `literal` binding (there is no `encoded`) and does not implement WS-Security,
+  which appears only in third-party extensions such as `flask-spyne`.
+- **suds-community**: the maintained fork of the old `suds` (the original package and
+  `suds-jurko` have been abandoned since 2014). It implements RPC/encoded correctly,
+  but is a **pure client**, with no server and no security. The latest version is
+  1.2.0, from August 2024, and its *classifiers* declare **up to Python 3.10**
+  (minimum 3.7); there is no officially declared support for Python 3.12, 3.13, or
+  3.14.
+
+The operational conclusion is explicit: for a team standardizing on a **current**
+Python version (3.12, 3.13, or 3.14), only `zeep` and `soapbar` declare official
+support. `spyne` and `suds-community` are stuck at the 3.10 ceiling. This is a
+**concrete platform constraint**, not a matter of taste: the supported Python version
+bounds where the library can be deployed without leaving certified territory.
+
+## 3. SOAP is not a single format: styles and uses
+
+Much of the confusion around SOAP comes from treating it as one format. It is not.
+The SOAP/HTTP binding described in the WSDL has **two independent axes**:
+
+- The **style** axis (`style`) takes the values `rpc` or `document` and defines the
+  format of the message body.
+- The **use** axis (`use`) takes the values `encoded` or `literal` and defines how the
+  data types are described.
+
+The combination of the two axes, plus the *wrapped* convention over document/literal,
+produces the five styles that `soapbar` models. The same logical response (a list of
+stations, each associated with its river basin) is serialized in radically different
+ways across styles. The component below shows the same response in the three most
+relevant styles:
+
+<EnvelopeComparator client:visible lang="en" />
+
+The difference is structural, not cosmetic. In **RPC/encoded**, the two stations
+reference the *same* basin via `href="#id3"` (a `multiRef`), and each value declares
+its `xsi:type`; the client must rebuild the reference graph to deliver the object. In
+**document/literal**, the basin is repeated inline and types are left to the schema;
+it is more verbose on the wire, yet trivial to parse, which is why it is the modern
+default, recommended by the WS-I (Web Services Interoperability Organization) Basic
+Profile, which, in rule R2706 (Basic Profile 1.1), **forbids** the use of `encoded`.
+`soapbar` treats the five styles as first-class citizens, exposed through the
+`BindingStyle` enum:
+
+```python
+from soapbar import BindingStyle
+
+BindingStyle.RPC_ENCODED               # legacy (e.g. WITSML 1.4.1.1)
+BindingStyle.DOCUMENT_LITERAL_WRAPPED  # recommended modern default
+```
+
+## 4. Architecture decision: one core, two ends
+
+The structural decision that sets `soapbar` apart from zeep and spyne is explicit:
+**client and server share the same core**. The technical rationale is direct:
+building and parsing a SOAP envelope is the same problem seen from two angles.
+Splitting it into two libraries (one for client, one for server) is precisely what
+produces the ecosystem's fragmentation and the behavioral divergence between the two
+ends.
+
+<SoapArchitecture lang="en" />
+
+The execution flow is as follows: the HTTP request enters through an **ASGI**
+(Asynchronous Server Gateway Interface: FastAPI, Starlette) or **WSGI** (Web Server
+Gateway Interface: Flask, Django) adapter; `SoapApplication` dispatches, applies
+WS-Security and the security limits; and everything rests on the core, which
+concentrates binding, envelope assembly/parsing, the type system, WSDL generation and
+reading, XML serialization, and fault handling. The cost of this decision is a more
+complex core; the benefit is to drastically reduce the behavioral divergence between
+the two ends, a property that the conformance suite in §8 verifies explicitly.
+
+Defining a service (server side) is declarative, and the WSDL is generated from the
+Python type annotations:
+
+```python
+from soapbar import SoapService, soap_operation, SoapApplication, AsgiSoapApp
+
+class Calculator(SoapService):
+    __service_name__ = "Calculator"
+    __tns__ = "http://example.com/calc"
+
+    @soap_operation()
+    def add(self, a: int, b: int) -> int:
+        return a + b
+
+soap_app = SoapApplication(service_url="http://localhost:8000")
+soap_app.register(Calculator())
+app = AsgiSoapApp(soap_app)
+```
+
+Consuming a service (client side) uses the same core, with the same fluency:
+
+```python
+from soapbar import SoapClient
+
+client = SoapClient(wsdl_url="http://localhost:8000/soap?wsdl")
+client.service.add(a=3, b=5)   # returns 8
+```
+
+## 5. Security: the XML threat model
+
+SOAP rarely runs in a trusted environment: it is, by definition, integration between
+organizations, processing XML from external sources. XML is a well-known attack
+vector. Since version 5.0 (December 2023), the `lxml` parser has been safer by default:
+it does not expand **external** entities (`resolve_entities='internal'`) and
+disables network access (`no_network=True`). Two gaps remain, however: the default
+still expands **internal** entities, leaving the *billion laughs* vector open unless
+expansion is disabled; and none of the SOAP libraries compared in §2 declares message
+size or nesting depth limits as a requirement. `soapbar` treats these mitigations as a
+**design requirement**, not as an optional configuration. The threats and their
+defenses are explicit:
+
+| Threat | Description | Mitigation in soapbar |
+|---|---|---|
+| **XXE** (XML External Entity) | An external entity reads local files or triggers internal requests | `resolve_entities=False`, `no_network=True`, `load_dtd=False` |
+| **Billion laughs** | Exponential expansion of *internal* entities exhausts memory | Entity expansion disabled (`resolve_entities=False`) |
+| **Deep nesting (DoS)** | Deeply nested XML exhausts the parsing stack | **100-level** depth limit (configurable) |
+| **Oversized message** | A giant payload exhausts process memory | **10 MB** per-message limit (configurable) |
+| **Eavesdropping and tampering** | Reading or modifying content in transit | WS-Security: RSA-SHA256 signing, AES-256-CBC encryption |
+| **Authentication** | Identifying the caller | UsernameToken (PasswordText or PasswordDigest SHA-1) |
+
+Enabling authentication on the client is an explicit, local operation:
+
+```python
+from soapbar.core.wssecurity import UsernameTokenCredential
+
+cred = UsernameTokenCredential(username="alice", password="secret", use_digest=True)
+client = SoapClient.manual("https://example.com/soap", wss_credential=cred)
+```
+
+None of the libraries compared in §2 documents size and depth limits as a design
+requirement. In an integration exposed to third-party XML, having those defenses as
+the library's default behavior (rather than as the application code's responsibility)
+is a difference in security posture worth declaring explicitly.
+
+## 6. NF-e digital signature (SEFAZ, layout 4.00)
+
+The Brazilian electronic invoice (NF-e) is the case that demonstrates, unequivocally,
+why a "generic" SOAP client is insufficient. The NF-e requires **per-element XML
+digital signature**: the signature does not cover the whole envelope, but the
+`<infNFe>` element, referenced by its `Id` attribute (an *enveloped* signature). The
+profile required by SEFAZ, verifiable in the *Manual de Orientação do Contribuinte*,
+is precise: **inclusive C14N (Canonical XML 1.0)** canonicalization, `SignatureMethod`
+= **RSA-SHA1**, `DigestMethod` = **SHA-1**, and a digital certificate from
+**ICP-Brasil (the Brazilian Public Key Infrastructure), type A1 or A3**. (Important:
+the NF-e remains on SHA-1 for the document's internal signature; the move to SHA-256
+happened in the TLS transport, not in the XML signature.)
+
+<NfeSigningFlow lang="en" />
+
+The point of greatest risk is step 2, **canonicalization** (C14N): the serialized
+representation of `<infNFe>` must match **byte for byte** what SEFAZ recomputes on
+receipt. Any divergence (a space, an attribute order) invalidates the signature and
+the invoice is rejected. `soapbar` wraps the five steps in a single operation,
+parameterized with the exact NF-e profile:
+
+```python
+from soapbar.core.wssecurity import sign_element_by_id
+
+signed = sign_element_by_id(
+    nfe_xml, "NFe3106...", private_key, certificate,
+    signature_method="rsa-sha1",   # SEFAZ requirement
+    digest_method="sha1",          # SEFAZ requirement
+    c14n="inclusive",              # inclusive Canonical XML 1.0
+    end_cert_only=True,            # only the leaf certificate in X509
+)
+```
+
+This eliminates hand-assembling the signature with `signxml` or `xmlsec` and the
+trial-and-error cycle of SEFAZ rejections. There is a second use of the same
+certificate: transmission to the SEFAZ web services requires **mutual TLS
+authentication (mTLS)**: the ICP-Brasil certificate is presented in the TLS handshake
+too, not only in the document signature. The contribution client `NfeClient` covers
+both uses, loading the A1 certificate from a `.pfx` file (PKCS#12 format).
+
+## 7. Domain clients and the extensibility proof (ANA)
+
+A protocol library proves its worth in real cases, not in the abstract. `soapbar`
+ships three domain clients in the `soapbar.contrib` package, each solving a specific,
+documentable difficulty:
+
+| Client (`soapbar.contrib`) | Service | Difficulty it solves |
+|---|---|---|
+| `ViesClient` | EU VAT validation (VIES), SOAP operation `checkVat` | Government SOAP, document/literal, with frequent outages |
+| `WitsmlClient` | WITSML 1.4.1.1 STORE API | RPC/encoded with multiRef (§1) |
+| `NfeClient` | SEFAZ NF-e layout 4.00 | ICP-Brasil signing and mTLS (mutual TLS) (§6) |
+
+The architectural question is whether this pattern **generalizes**, or whether each
+client is an isolated case. To answer empirically, I pointed `soapbar` at a service it
+did not yet know: the
+[ANA telemetry web service](https://telemetriaws1.ana.gov.br/serviceana.asmx) (the
+Brazilian National Water Agency), a legacy `.asmx` (ASP.NET) service that provides
+levels, rainfall, and flow rates for hydrometeorological stations. The integration is
+short precisely because the core already handles binding, parsing, and typing; the
+domain shell is thin:
+
+```python
+from soapbar import SoapClient
+
+ana = SoapClient(wsdl_url="https://telemetriaws1.ana.gov.br/serviceana.asmx?WSDL")
+
+# list of active telemetric stations
+stations = ana.service.ListaEstacoesTelemetricas(statusEstacoes=1, origem=0)
+
+# levels, rainfall, and flow rates for a station, by period
+data = ana.service.DadosHidrometeorologicosGerais(
+    codEstacao="12345",
+    dataInicio="2026-01-01",
+    dataFim="2026-01-31",
+)
+```
+
+This is the test of a good abstraction: a new, real, legacy service is integrated in a
+few lines, and, when it warrants becoming a `contrib`, it is only a matter of
+wrapping that pattern. Worth noting the context: ANA's own `Telemetria1ws` is being
+decommissioned, replaced by a newer service. That reinforces the project's central
+thesis: legacy SOAP is exactly what nobody wants to maintain and, for that reason,
+needs tooling that treats it seriously.
+
+## 8. Conformance with the WS-I Basic Profile
+
+A protocol library that "works on my tests" is insufficient, because SOAP has a formal
+specification and silent deviations become the interoperability problem of whoever
+integrates next. That is why `soapbar` maintains a **135-test conformance suite**,
+auditing behavior against **46 checkpoints** derived from the WS-I Basic Profile and
+the Basic Security Profile, over both envelopes (SOAP 1.1 and SOAP 1.2). The purpose
+is explicit: to make conformance a property verified on every commit, not a statement
+of good faith.
+
+## 9. Scope: what is delivered and what is out
+
+The scope boundary is declared explicitly, so that no gap is discovered in production:
+
+| Item | Status |
+|---|---|
+| SOAP 1.1 and 1.2, five binding styles, client and server | Delivered |
+| WS-Security, WS-Addressing 1.0, MTOM/XOP | Delivered |
+| Contribution clients VIES, WITSML, and NF-e | Delivered |
+| WS-I conformance suite (135 tests) | Delivered |
+| WSDL 2.0 | Out of scope (WSDL 1.1 only) |
+| WS-Policy, WS-Trust, WS-SecureConversation, WS-Federation | Out of scope |
+| Intermediary routing (SOAP 1.2 `relay` attribute) | Parsing yes; forwarding no |
+
+The stack is equally explicit: Python **3.10 to 3.14**, `lxml` as a core dependency,
+`httpx` optional for the async client, **Apache-2.0** license. Installation is
+modular, with declared extras: you pay only for what you use:
+
+```bash
+pip install soapbar            # core + server
+pip install soapbar[client]    # adds httpx (client)
+pip install soapbar[security]  # adds signxml + cryptography
+pip install soapbar[nfe]       # SEFAZ NF-e client
+pip install soapbar[all]       # all extras
+```
+
+(There are also `[vies]` and `[witsml]` extras for the respective contribution
+clients.)
+
+## 10. Architecture retrospective
+
+Three decisions I would make differently in hindsight:
+
+- **The initial scope was too narrow.** The motivation was a point problem
+  (RPC/encoded in WITSML), but the real value only appeared when the core became
+  generic enough to serve client, server, and security from the same code. The shared
+  core should have been the premise from day one, not a consequence.
+- **Conformance should have preceded features.** The WS-I suite was written after much
+  of the bindings; had it come first, it would have caught serialization
+  inconsistencies that were costly to fix later.
+- **Contribution clients are the best documentation.** Each domain client (VIES,
+  WITSML, NF-e) exercises the API more honestly than any README example. The ANA
+  integration confirmed, in practice, that the pattern holds.
+
+## 11. Getting started
+
+The repository is on GitHub, with runnable examples in the `examples/` directory. The
+shortest path to evaluate the library is to point the client at a real WSDL (the ANA
+service cited in §7 is a public, free testing ground) or to stand up a server in a
+few lines with `@soap_operation`. If your concrete problem is WITSML's `multiRef`, the
+NF-e digital signature, or the need for a SOAP client and server with security in one
+place, that is exactly what `soapbar` was built for.

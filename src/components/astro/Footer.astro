@@ -1,4 +1,8 @@
 ---
+import { getLocaleFromUrl, useTranslations } from '../../i18n/ui';
+
+const locale = getLocaleFromUrl(Astro.url);
+const t = useTranslations(locale);
 const year = new Date().getFullYear();
 const socials = [
   { href: 'https://github.com/hitoshyamamoto', label: 'GitHub' },
@@ -9,7 +13,7 @@ const socials = [
 
 <footer class="border-t border-border">
   <div class="container-page flex flex-col items-center justify-between gap-3 py-8 text-sm text-muted sm:flex-row">
-    <p>© {year} Hitoshi Yamamoto · feito com Astro</p>
+    <p>© {year} Hitoshi Yamamoto · {t('footer.madeWith')}</p>
     <div class="flex items-center gap-4">
       {
         socials.map((s) => (

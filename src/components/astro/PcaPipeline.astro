@@ -1,0 +1,77 @@
+---
+// Fluxograma do pipeline de detecção, renderizado no build.
+const steps = [
+  { n: 1, t: 'Dados brutos', d: '52 sensores, 1 leitura/min' },
+  { n: 2, t: 'Recorte do regime normal', d: 'rótulo usado só para selecionar o treino' },
+  { n: 3, t: 'Padronizar', d: 'escore-z: mesma régua para todo sensor' },
+  { n: 4, t: 'Ajustar PCA', d: 'reter componentes até 95% da variância' },
+  { n: 5, t: 'Projetar → reconstruir', d: 'resumir no subespaço e voltar' },
+];
+const branch = [
+  { t: 'SPE', d: 'erro de reconstrução: desvio "para fora" do padrão' },
+  { t: 'T²', d: 'Mahalanobis: extremo "dentro" do padrão' },
+];
+const tail = [
+  { n: 7, t: 'Comparar com o limiar', d: 'percentil do normal ou corte da qui-quadrado' },
+  { n: 8, t: 'Alarme + diagnóstico', d: 'contribuição por sensor: qual disparou' },
+];
+
+const box = 'rounded-lg border border-border bg-bg px-4 py-2.5';
+---
+
+<figure class="not-prose my-6 rounded-xl border border-border bg-surface p-5">
+  <div class="mx-auto flex max-w-md flex-col items-stretch text-sm">
+    {
+      steps.map((s) => (
+        <>
+          <div class={box}>
+            <span class="mr-2 font-mono text-xs text-accent">{s.n}</span>
+            <span class="font-medium text-fg">{s.t}</span>
+            <p class="mt-0.5 text-xs text-muted">{s.d}</p>
+          </div>
+          <div class="flex flex-col items-center py-1 text-muted" aria-hidden="true">
+            <div class="h-3 w-px bg-border" />
+            <span class="text-[10px] leading-none">▼</span>
+          </div>
+        </>
+      ))
+    }
+
+    {/* ramificação: SPE e T² em paralelo */}
+    <div class="grid grid-cols-2 gap-3">
+      {
+        branch.map((b) => (
+          <div class="rounded-lg border border-accent/40 bg-bg px-3 py-2.5">
+            <span class="font-mono font-semibold text-accent">{b.t}</span>
+            <p class="mt-0.5 text-xs text-muted">{b.d}</p>
+          </div>
+        ))
+      }
+    </div>
+    <div class="flex flex-col items-center py-1 text-muted" aria-hidden="true">
+      <div class="h-3 w-px bg-border" />
+      <span class="text-[10px] leading-none">▼ SPE ou T² acima do limiar</span>
+    </div>
+
+    {
+      tail.map((s, i) => (
+        <>
+          <div class={box}>
+            <span class="mr-2 font-mono text-xs text-accent">{s.n}</span>
+            <span class="font-medium text-fg">{s.t}</span>
+            <p class="mt-0.5 text-xs text-muted">{s.d}</p>
+          </div>
+          {i < tail.length - 1 && (
+            <div class="flex flex-col items-center py-1 text-muted" aria-hidden="true">
+              <div class="h-3 w-px bg-border" />
+              <span class="text-[10px] leading-none">▼</span>
+            </div>
+          )}
+        </>
+      ))
+    }
+  </div>
+  <figcaption class="mt-4 text-center text-xs text-muted">
+    O treino acontece uma vez (passos 2 a 4); detecção e diagnóstico (5 a 8) rodam a cada nova leitura.
+  </figcaption>
+</figure>

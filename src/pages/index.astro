@@ -6,7 +6,7 @@ import { getUnifiedFeed } from '../lib/content';
 import { getCollection } from 'astro:content';
 
 const feed = (await getUnifiedFeed()).slice(0, 4);
-const projects = (await getCollection('projects'))
+const projects = (await getCollection('projects', (e) => e.data.lang === 'pt'))
   .sort((a, b) => Number(b.data.highlight) - Number(a.data.highlight))
   .slice(0, 3);
 ---

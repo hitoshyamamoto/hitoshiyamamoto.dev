@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PostCard from '../../../components/astro/PostCard.astro';
+import { getUnifiedFeed } from '../../../lib/content';
+import { useTranslations } from '../../../i18n/ui';
+
+const locale = 'en';
+const t = useTranslations(locale);
+const feed = await getUnifiedFeed(locale);
+---
+
+<BaseLayout title={t('writing.title')} description={t('writing.intro')}>
+  <header class="mb-8 max-w-2xl">
+    <h1 class="text-3xl font-bold tracking-tight">{t('writing.title')}</h1>
+    <p class="mt-2 text-muted">{t('writing.intro')}</p>
+  </header>
+
+  <div class="grid gap-4 sm:grid-cols-2">
+    {feed.map((item) => <PostCard item={item} />)}
+  </div>
+
+  {feed.length === 0 && <p class="text-muted">{t('writing.empty')}</p>}
+</BaseLayout>

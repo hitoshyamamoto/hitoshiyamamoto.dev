@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { path } from '../../i18n/ui';
+
+const locale = 'en';
+---
+
+<BaseLayout title="About" description="Who Hitoshi Yamamoto is: engineering, data, and systems.">
+  <article class="prose-page article-body">
+    <h1 class="text-3xl font-bold tracking-tight">About</h1>
+
+    <p>
+      I'm <strong>Hitoshi Yamamoto</strong>, an engineer focused on data, systems, and
+      integration. This site is my hub-in-code: it gathers what I write, the projects I
+      maintain, and the interactive demos I build to understand a problem better, and
+      to show how it actually works.
+    </p>
+
+    <h2>What you'll find here</h2>
+    <ul>
+      <li><a href={path(locale, 'writing')}>Writing</a>: native articles written on this site.</li>
+      <li><a href={path(locale, 'projects')}>Projects</a>: a curated showcase, enriched with live GitHub metadata.</li>
+      <li><a href={path(locale, 'labs')}>Labs</a>: visualizers and simulations that run in the browser.</li>
+    </ul>
+
+    <h2>Contact</h2>
+    <p>
+      <a href="https://github.com/hitoshyamamoto">GitHub</a> ·
+      <a href="https://medium.com/@hitoshyamamoto">Medium</a>
+    </p>
+  </article>
+</BaseLayout>

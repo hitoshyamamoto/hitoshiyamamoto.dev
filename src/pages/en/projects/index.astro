@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ProjectCard from '../../../components/astro/ProjectCard.astro';
+import { getCollection } from 'astro:content';
+import { useTranslations } from '../../../i18n/ui';
+
+const locale = 'en';
+const t = useTranslations(locale);
+const projects = (await getCollection('projects', (e) => e.data.lang === 'en')).sort((a, b) => {
+  if (a.data.highlight !== b.data.highlight) return Number(b.data.highlight) - Number(a.data.highlight);
+  return a.data.title.localeCompare(b.data.title);
+});
+---
+
+<BaseLayout title={t('projects.title')} description={t('projects.intro')}>
+  <header class="mb-8 max-w-2xl">
+    <h1 class="text-3xl font-bold tracking-tight">{t('projects.title')}</h1>
+    <p class="mt-2 text-muted">{t('projects.intro')}</p>
+  </header>
+
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {projects.map((project) => <ProjectCard project={project} />)}
+  </div>
+</BaseLayout>

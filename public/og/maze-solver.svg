@@ -8,5 +8,4 @@
   <rect x="48" y="48" width="56" height="56" fill="#10b981"/>
   <rect x="696" y="346" width="56" height="56" fill="#ef4444"/>
   <g fill="#2dd4bf"><rect x="130" y="130" width="20" height="20"/><rect x="210" y="210" width="20" height="20"/><rect x="290" y="290" width="20" height="20"/><rect x="370" y="300" width="20" height="20"/></g>
-  <text x="400" y="430" font-family="Inter, sans-serif" font-size="18" fill="#a8a29e" text-anchor="middle">Visualizador de labirintos</text>
 </svg>

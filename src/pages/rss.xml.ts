@@ -4,7 +4,7 @@ import { getNativePosts } from '../lib/content';
 import { SITE } from '../lib/seo';
 
 /**
- * Feed RSS canônico do site. Só inclui posts nativos — o conteúdo agregado do
+ * Feed RSS canônico do site. Só inclui posts nativos: o conteúdo agregado do
  * Medium permanece canônico na origem e não é republicado aqui.
  */
 export async function GET(context: APIContext) {

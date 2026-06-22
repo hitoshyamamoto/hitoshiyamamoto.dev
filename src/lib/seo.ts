@@ -2,7 +2,7 @@
 
 export const SITE = {
   name: 'Hitoshi Yamamoto',
-  title: 'Hitoshi Yamamoto — escritos, projetos e labs',
+  title: 'Hitoshi Yamamoto: escritos, projetos e labs',
   description:
     'Hub pessoal de Hitoshi Yamamoto: artigos, projetos de engenharia e demos interativos.',
   url: 'https://hitoshiyamamoto.dev',
@@ -40,7 +40,7 @@ export function absoluteUrl(path: string, base: string = SITE.url): string {
 
 /** Constrói as tags de SEO para um <head>. */
 export function buildSeo(input: SeoInput = {}): SeoTags {
-  const title = input.title ? `${input.title} — ${SITE.name}` : SITE.title;
+  const title = input.title ? `${input.title}: ${SITE.name}` : SITE.title;
   return {
     title,
     description: input.description ?? SITE.description,

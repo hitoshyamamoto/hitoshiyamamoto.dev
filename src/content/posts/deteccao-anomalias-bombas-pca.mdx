@@ -1,46 +1,169 @@
 ---
-title: "PCA na prática: antecipando falhas de bombas industriais"
+title: "PCA na prática: detecção, diagnóstico e monitoramento de bombas industriais"
 kind: interactive
 publishedAt: 2026-06-20
-summary: "Erro de reconstrução do PCA aplicado ao pump-sensor-data do Kaggle: como detectar a degradação antes do BROKEN."
-tags: ["machine-learning", "pca", "anomaly-detection", "manutencao-preditiva"]
+summary: "Detecção de anomalia não-supervisionada com PCA: aprender o 'normal' de 52 sensores, antecipar a falha, apontar qual sensor disparou e o que separa protótipo de produção."
+tags: ["machine-learning", "pca", "anomaly-detection", "aprendizado-nao-supervisionado", "deteccao-de-novidade", "controle-estatistico-de-processo", "manutencao-preditiva"]
 lang: pt
 ---
 
 import PumpAnomalyChart from '../../components/react/PumpAnomalyChart.tsx';
 import PcaSimulator from '../../components/react/PcaSimulator.tsx';
+import PcaPipeline from '../../components/astro/PcaPipeline.astro';
+import ScreePlot from '../../components/react/ScreePlot.tsx';
+import ContributionPlot from '../../components/react/ContributionPlot.tsx';
+import DetectionMap from '../../components/astro/DetectionMap.astro';
+import RegimeStates from '../../components/react/RegimeStates.tsx';
+import Windowing from '../../components/astro/Windowing.astro';
+import WindowTradeoff from '../../components/react/WindowTradeoff.tsx';
+import EwmaSmoothing from '../../components/react/EwmaSmoothing.tsx';
+import HardwareBudget from '../../components/react/HardwareBudget.tsx';
+import Subspace from '../../components/astro/Subspace.astro';
+import NormalTail from '../../components/react/NormalTail.tsx';
 
-Detecção de anomalias é um daqueles problemas onde rotular é caro e a falha é
-rara. Você quase nunca tem exemplos suficientes de "quebrado" para treinar um
-classificador — mas tem horas e horas de "funcionando". O PCA explora exatamente
-essa assimetria: aprende a forma do regime normal e denuncia tudo que foge dela.
+Imagine uma sala de controle com **52 mostradores**, um para cada sensor de uma
+estação de bombeamento. Ninguém consegue vigiar 52 ponteiros ao mesmo tempo e
+perceber que, juntos, eles começaram a contar uma história estranha. É esse o
+problema que o PCA resolve, e ele faz isso sem nunca ter visto uma falha.
 
-Para sair do abstrato, vou usar o
-[pump-sensor-data](https://www.kaggle.com/datasets/nphantawee/pump-sensor-data/data):
-~220 mil leituras por minuto de **52 sensores** de uma estação de bombeamento,
-com uma coluna `machine_status` que assume `NORMAL`, `BROKEN` e `RECOVERING`. Há
-**7 falhas** no período. O objetivo prático não é apenas marcar o minuto do
-`BROKEN` — é perceber a degradação *antes* dele.
+Vou construir a ideia do zero e, no caminho, aplicá-la a um caso real: o
+[pump-sensor-data](https://www.kaggle.com/datasets/nphantawee/pump-sensor-data/data),
+com ~220 mil leituras por minuto desses 52 sensores e uma coluna `machine_status`
+que marca quando a bomba estava `NORMAL`, `BROKEN` (quebrada) ou `RECOVERING`
+(se recuperando). São **7 falhas** no período. A meta não é só apontar o minuto da
+quebra: é enxergar a degradação **antes** dela.
 
-## A ideia em uma frase
+## 1. Por que não treinar um classificador?
 
-O PCA encontra o subespaço de menor dimensão que melhor explica a variância dos
-dados normais. Projetar uma amostra nesse subespaço e reconstruí-la introduz um
-erro: o **erro de reconstrução** (ou estatística SPE / Q). Enquanto a bomba opera
-no regime aprendido, esse erro é baixo. Quando um mancal começa a vibrar fora do
-padrão, a correlação entre sensores muda, a amostra deixa de "caber" no subespaço
-e o erro dispara.
+A reação instintiva de quem vem do aprendizado **supervisionado** é: "tenho a
+coluna `machine_status`, então treino um classificador que aprende a separar
+`NORMAL` de `BROKEN`". Aprendizado supervisionado é exatamente isso: mostrar ao
+modelo muitos exemplos *rotulados* (entrada → resposta certa) até ele aprender o
+mapeamento. É o que faz um detector de spam ou um classificador de imagens.
+
+Aqui essa abordagem esbarra em três paredes:
+
+- **Falhas são raríssimas.** Em ~220 mil minutos há só 7 quebras. Um classificador
+  treinado nesse desequilíbrio aprende o atalho preguiçoso: "responda sempre
+  NORMAL" e acerte 99,99% das vezes, sendo inútil justamente no que importa.
+- **Falhas são variadas.** Cada modo de falha (mancal, vedação, cavitação) tem uma
+  assinatura diferente. Um modelo supervisionado só reconhece os modos que já viu
+  rotulados; um modo novo passa batido.
+- **Você precisaria da falha já ter acontecido** (e sido rotulada) para aprender
+  a preveni-la. Tarde demais.
+
+O aprendizado **não-supervisionado** vira o problema do avesso: em vez de aprender
+a *resposta*, aprende a *estrutura* dos dados. Não precisa de rótulos. Para
+detecção de anomalia, a jogada é elegante: aprenda só como é o **normal** (do qual
+você tem fartura) e sinalize tudo que destoar. Como qualquer desvio é suspeito,
+ele pega até modos de falha **nunca vistos antes**. É essa a família do PCA, e por
+isso ele detecta "sem nunca ter visto uma falha".
+
+> **A nuance honesta:** este dataset *tem* rótulos, mas o PCA não os usa para
+> treinar. Eu uso `machine_status` apenas para duas coisas: **selecionar** o trecho
+> normal sobre o qual o modelo é ajustado e **avaliar** o resultado depois. O modelo
+> nunca aprende a prever o rótulo. Treinar exclusivamente num conjunto sabidamente
+> normal tem até um nome mais preciso (*detecção de novidade*, ou anomalia
+> **semi-supervisionada**), mas o espírito é não-supervisionado: ele modela o
+> normal, não a falha.
+
+## 2. Os sensores não se movem sozinhos
+
+A primeira observação que destrava tudo: sensores de uma mesma máquina são
+**correlacionados**. Quando a bomba trabalha mais, vazão, pressão e temperatura
+sobem mais ou menos juntas. Elas não variam de forma independente: variam em
+*conjunto*, seguindo um número pequeno de "histórias".
+
+Em termos de dados: embora cada leitura seja um ponto em 52 dimensões, na prática
+esses pontos não preenchem todo o espaço. Eles se acumulam sobre uma **superfície
+de poucas dimensões**, definida justamente por essas correlações. É como uma folha
+de papel plana, porém inclinada, flutuando numa sala: o papel é 2D, mas vive num
+mundo 3D. (O PCA descreve uma superfície *plana*, um subespaço linear; superfícies
+curvas pedem outras ferramentas, como autoencoders.)
+
+<Subspace />
+
+## 3. O que o PCA faz, em uma frase
+
+> O PCA encontra as direções em que os dados normais mais variam, e descarta o
+> resto.
+
+Cada uma dessas direções é um **componente principal**: uma combinação dos 52
+sensores que captura uma das "histórias" de variação coordenada da máquina. As
+primeiras direções concentram quase toda a *variância* (o espalhamento) dos dados;
+as últimas são quase só ruído. Guardar as primeiras é guardar o esqueleto do
+regime normal.
+
+Dois movimentos compõem o método:
+
+- **Projetar** uma leitura sobre essa superfície (resumi-la nas poucas direções
+  que importam).
+- **Reconstruir** a leitura a partir dessa projeção (voltar para as 52 dimensões).
+
+Se a leitura pertencia ao regime normal, a reconstrução sai quase idêntica ao
+original. Se algo fugiu do padrão, a reconstrução erra, e esse **erro de
+reconstrução** é o nosso detector.
+
+## 4. A intuição em 2 dimensões
+
+Difícil visualizar 52 dimensões; com 2 dá para sentir o mecanismo. Abaixo, a nuvem
+cinza é o regime normal: pontos correlacionados que se alinham ao longo de uma
+única direção, o eixo tracejado que o PCA aprendeu. O **ponto verde** é a leitura
+atual; sua projeção é a bolinha cinza sobre o eixo; o segmento entre os dois é o
+erro de reconstrução.
 
 <PcaSimulator client:visible />
 
-Acima, a intuição geométrica em 2D: o eixo tracejado é o componente principal
-aprendido; o segmento colorido é o erro de reconstrução. Aumente a variância ou o
-desvio do regime e o ponto se afasta do eixo — o score cruza o limiar.
+Mexa nos controles. Enquanto o ponto fica perto do eixo, o erro é pequeno e tudo é
+"normal". Aumente o **desvio do regime** (o ângulo com que a leitura foge da
+direção aprendida) e o ponto se descola do eixo: o erro cresce até cruzar o
+limiar e virar **anomalia**. É exatamente isso que acontece em 52D quando um
+mancal vibra fora de hora: a correlação entre sensores quebra e a leitura "não
+cabe" mais na superfície normal.
 
-## O pipeline sobre o dataset
+## 5. Na operação, você assiste ao erro no tempo
 
-A regra de ouro: **ajustar o PCA apenas no regime normal**. Se a falha entrar no
-treino, ela vira "normal" e o detector fica cego justamente para o que importa.
+Detectar uma anomalia isolada é só o começo. O que vale ouro na manutenção é a
+**tendência**: o erro de reconstrução costuma subir numa rampa antes da quebra,
+conforme a degradação avança. Calculando esse erro a cada minuto e traçando-o no
+tempo, a falha deixa de ser uma surpresa.
+
+Duas convenções, que a Seção 6 formaliza em código: o número que vamos traçar é o
+erro de reconstrução (daqui em diante chamado **SPE**), e o **limiar** é apenas
+um valor alto observado quando a bomba está saudável (por exemplo, o percentil 99
+dos erros no regime normal). Cruzou o limiar, é alarme.
+
+O gráfico abaixo imita essa dinâmica sobre uma das falhas do dataset: um longo
+trecho normal, a rampa de **degradação** (faixa âmbar) e a **falha** rotulada
+(linha vermelha), seguida da recuperação. A linha tracejada é o limiar; o círculo
+verde é a primeira vez que o erro o cruza: a sua antecedência.
+
+<PumpAnomalyChart client:visible />
+
+Arraste o limiar (o percentil **p**) e observe o conflito:
+
+- **Limiar baixo** → você detecta a degradação mais cedo (mais horas de
+  antecedência para agir), mas o ruído do regime normal começa a cruzar a linha e
+  gera **alarmes falsos**: a sala de controle perde a confiança no alarme.
+- **Limiar alto** → zero alarmes falsos, mas você só percebe a falha quando ela
+  já está praticamente acontecendo.
+
+Não existe valor "certo" universal: o limiar é uma **decisão de negócio**, calibrada
+pelo custo de um alarme falso versus o custo de uma parada não planejada.
+
+O gráfico traz ainda um segundo controle, a **persistência**: exigir várias leituras
+seguidas acima do limiar antes de soar o alarme. Brinque com ele e veja os alarmes
+falsos despencarem; volto a esse truque, e a outros, na Seção 10.
+
+## 6. O mesmo método, sobre o dataset
+
+Antes do código, o caminho inteiro num só olhar, do dado bruto ao diagnóstico:
+
+<PcaPipeline />
+
+Em código, são poucos passos. A regra de ouro: **ajustar o PCA só no regime
+normal**. Se a falha entrar no treino, ela passa a ser "normal" e o detector fica
+cego para o que importa.
 
 ```python
 import numpy as np
@@ -50,21 +173,34 @@ from sklearn.decomposition import PCA
 
 df = pd.read_csv("sensor.csv", parse_dates=["timestamp"])
 
-# sensor_15 vem totalmente vazio; sensor_50 é esparso — limpe antes de tudo
+# sensor_15 vem totalmente vazio; sensor_50 é esparso: limpe antes de tudo
 sensors = [c for c in df.columns if c.startswith("sensor_") and c != "sensor_15"]
 X = df[sensors].interpolate().ffill().bfill()
+```
 
-# padroniza usando SÓ o regime normal (média/escala do "saudável")
+**Padronizar** é obrigatório: sensores em escalas diferentes (um em bar, outro em
+°C) desequilibram a variância, e o PCA passaria a "enxergar" só o sensor de números
+maiores. O `StandardScaler` coloca todos na mesma régua (cada valor vira seu
+**escore-z**, $z = \dfrac{x - \mu}{\sigma}$, ou seja, "a quantos desvios-padrão do
+normal estou") e é ajustado apenas no regime normal:
+
+```python
 normal = X[df["machine_status"] == "NORMAL"]
 scaler = StandardScaler().fit(normal)
 
-# retém 95% da variância do regime normal
+# retém componentes até explicar 95% da variância do regime normal
 pca = PCA(n_components=0.95).fit(scaler.transform(normal))
 ```
 
-Com o modelo ajustado, calcula-se o erro de reconstrução (SPE) para a série
-inteira e calibra-se o limiar num percentil alto **do regime normal** — nunca dos
-dados de falha:
+Por que `0.95`? Porque as primeiras direções concentram quase toda a variância e o
+resto é praticamente ruído. Mova o alvo e veja quantos componentes ($k$) bastam;
+é a compressão que dá ao detector a sua sensibilidade:
+
+<ScreePlot client:visible />
+
+Com o modelo pronto, projeta-se, reconstrói-se e mede-se o erro (a estatística
+**SPE**, ou Q) para a série inteira. O limiar sai de um percentil alto **do regime
+normal**:
 
 ```python
 Xs   = scaler.transform(X)
@@ -75,42 +211,765 @@ thr = np.percentile(spe[df["machine_status"] == "NORMAL"], 99)
 df["anomaly"] = spe > thr
 ```
 
-## Movendo o limiar
+Em fórmula, o SPE de uma leitura $\mathbf{x}$ reconstruída como $\hat{\mathbf{x}}$
+é simplesmente a distância ao quadrado entre as duas:
 
-É aqui que a teoria encontra a operação. O percentil do limiar é uma escolha de
-negócio, não de matemática: baixo demais, a sala de controle ignora os alarmes;
-alto demais, a falha passa. Arraste o limiar e observe o trade-off entre
-**antecedência** (quão cedo o PCA sinaliza antes do `BROKEN`) e **alarmes falsos**
-no regime normal:
+$$
+\mathrm{SPE} = \lVert \mathbf{x} - \hat{\mathbf{x}} \rVert^2 = \sum_{j=1}^{d} \left( x_j - \hat{x}_j \right)^2 .
+$$
 
-<PumpAnomalyChart client:visible />
+Pronto: `df["anomaly"]` é a série de alarmes que você viu no gráfico interativo,
+agora sobre os dados reais.
 
-Repare no ponto circulado em verde: é a primeira amostra acima do limiar dentro
-da rampa de degradação. A diferença entre ele e a linha vermelha do `BROKEN` é a
-janela que a equipe de manutenção ganha para agir — de horas a dias, dependendo
-de quão cedo a assinatura da falha emerge.
+## 7. Diagnóstico: qual sensor disparou?
 
-## SPE não é a única estatística
+O SPE responde *se* a leitura é anômala, mas não *qual* sensor a causou: é um
+número só, que resume os 52. Felizmente a própria definição do SPE já carrega a
+resposta: como ele é a soma dos resíduos ao quadrado, cada parcela é a
+**contribuição** daquele sensor para o alarme.
 
-O erro de reconstrução captura o que sai do subespaço. A estatística **T² de
-Hotelling** é complementar: mede o quão extrema é a amostra *dentro* do subespaço
-(distância de Mahalanobis nos componentes retidos). Falhas reais costumam acender
-uma, a outra, ou as duas — monitorar ambas reduz o ponto cego:
+$$
+\mathrm{SPE} = \sum_{j=1}^{d} c_j, \qquad c_j = \left( x_j - \hat{x}_j \right)^2 .
+$$
+
+Para uma leitura anômala, basta ordenar os $c_j$: os maiores apontam os sensores
+que mais "saíram do padrão". É o *contribution plot*, o passo de diagnóstico
+clássico do monitoramento por PCA.
+
+```python
+# resíduo por sensor (linhas = tempo, colunas = sensores)
+resid = (Xs - proj) ** 2
+
+# primeiro instante sinalizado e os 5 sensores que mais contribuíram
+i = df.index[df["anomaly"]][0]
+culpados = (
+    pd.Series(resid[i], index=sensors)
+    .sort_values(ascending=False)
+    .head(5)
+)
+print(culpados)   # ex.: sensor_04, sensor_38, sensor_41, ...
+```
+
+Troque o cenário abaixo e veja o ranking mudar: em regime normal nenhuma barra se
+destaca; em cada falha, poucos sensores concentram o erro, e falhas diferentes
+acendem sensores diferentes:
+
+<ContributionPlot client:visible />
+
+Agora o alarme tem endereço: *"a anomalia das 14h32 foi puxada pelos sensores 04,
+38 e 41"*: exatamente o que a manutenção precisa para saber onde olhar. É também
+aqui que sua intuição se confirma: **depois** do PCA, alguns sensores de fato
+indicam a anomalia. Mas note a ordem: o PCA não pré-seleciona "os sensores bons";
+ele aprende a correlação dos **52 juntos** e só *depois* do alarme você atribui a
+culpa aos que mais destoaram.
+
+Uma ressalva honesta: contribuição **localiza**, não **prova**. Sensores
+correlacionados podem "espalhar a culpa", o *smearing effect*: quando um desvia,
+os vizinhos correlacionados também acusam resíduo. Trate o ranking como um ponteiro
+para o engenheiro investigar, e cruze com a T² (a seguir) para a leitura completa.
+
+## 8. Um segundo olho: a estatística T²
+
+O erro de reconstrução enxerga o que **sai** da superfície. Há um desvio que ele
+não vê: a leitura que continua *sobre* a superfície, mas num ponto extremo dela
+(a máquina operando num regime válido, porém raríssimo). Para isso existe a **T²
+de Hotelling**, que mede o quão longe a projeção está do centro, dentro do
+subespaço. Sendo $t_i$ a $i$-ésima coordenada da leitura nos componentes
+principais e $\lambda_i$ a variância ao longo daquele componente:
+
+$$
+T^2 = \sum_{i=1}^{k} \frac{t_i^2}{\lambda_i} .
+$$
+
+Dividir cada coordenada por $\lambda_i$ é o pulo do gato: padroniza cada eixo pela
+sua própria dispersão. Isso é a **distância de Mahalanobis** ao centro, restrita ao
+subespaço dos $k$ componentes retidos: a versão multivariada do escore-z, que pesa
+cada direção pela variância e pela correlação entre os sensores. (A T² mede essa
+distância *dentro* do modelo; o SPE mede o que sobrou *fora* dele.)
+
+$$
+D_M^2(\mathbf{x}) = (\mathbf{x} - \boldsymbol{\mu})^{\top}\, \Sigma^{-1} (\mathbf{x} - \boldsymbol{\mu}) .
+$$
+
+Em código:
 
 ```python
 scores = pca.transform(Xs)
 t2 = np.sum((scores / np.sqrt(pca.explained_variance_)) ** 2, axis=1)
 ```
 
-## O que levar deste exemplo
+Na prática, monitora-se **SPE e T² juntos**: uma cobre o desvio "para fora" do
+padrão, a outra o desvio "extremo dentro" do padrão. Falhas reais acendem uma, a
+outra, ou ambas. O mapa abaixo mostra como as duas, combinadas, separam o normal
+de três modos distintos de desvio:
 
-- **Treine só no normal.** O detector tem que ignorar a falha durante o ajuste.
-- **Padronize.** Sensores em escalas diferentes desequilibram a variância e o PCA
-  passa a "enxergar" só o sensor mais barulhento.
-- **O limiar é decisão operacional.** Calibre no regime normal e ajuste pelo custo
-  relativo de um alarme falso versus uma falha não detectada.
-- **SPE + T² juntos.** Cada estatística cobre um tipo de desvio.
+<DetectionMap />
 
-O PCA não é o detector mais sofisticado que existe — autoencoders e modelos
-temporais vão além. Mas é barato, interpretável e roda perto do sensor, e na
-maioria das estações de bombeamento isso é exatamente o que se precisa.
+## 9. A distribuição normal por trás dos limiares
+
+Por que esses "erros ao quadrado" funcionam como detector, e de onde sai um limiar
+honesto? A resposta está na **distribuição normal** (a gaussiana). Para um único
+sensor, ela é a clássica curva em sino, governada por média $\mu$ e desvio-padrão
+$\sigma$:
+
+$$
+f(x) = \frac{1}{\sigma\sqrt{2\pi}} \, \exp\!\left( -\frac{(x-\mu)^2}{2\sigma^2} \right) .
+$$
+
+A gaussiana tem uma propriedade que usamos sem perceber: **quase tudo cai perto da
+média**. Em torno de $68\%$ das leituras ficam a até $1\sigma$, $95\%$ a até
+$2\sigma$ e $99{,}7\%$ a até $3\sigma$. É daí que vem o limiar por percentil da
+Seção 5: pedir o **percentil 99** é, numa gaussiana, ficar a cerca de $2{,}33\sigma$
+da média, bem na cauda, onde "normal" é raro. O velho controle estatístico de
+processo chama o corte em $3\sigma$ de limite de controle pelo mesmo motivo.
+
+<NormalTail client:visible />
+
+Com vários sensores correlacionados, a generalização é a **normal multivariada**.
+A nuvem do regime normal vira um elipsoide, e a fórmula troca $\mu,\sigma$ pelo
+vetor de médias $\boldsymbol{\mu}$ e pela matriz de covariância $\Sigma$:
+
+$$
+f(\mathbf{x}) = \frac{1}{(2\pi)^{d/2}\,|\Sigma|^{1/2}} \, \exp\!\left( -\tfrac{1}{2} (\mathbf{x}-\boldsymbol{\mu})^{\top} \Sigma^{-1} (\mathbf{x}-\boldsymbol{\mu}) \right) .
+$$
+
+Repare no expoente: ele é $-\tfrac{1}{2}D_M^2$, a distância de Mahalanobis da seção
+anterior, a menos do fator $-\tfrac{1}{2}$. Ou seja, **quão "anômala" é uma leitura
+sob a hipótese gaussiana está escrito no expoente da sua densidade**: Mahalanobis
+grande → expoente muito negativo → densidade ínfima, ponto improvável. E é aqui que PCA e geometria se encontram: os componentes principais
+são os **eixos do elipsoide** (os autovetores de $\Sigma$), e cada $\lambda_i$ é a
+variância ao longo daquele eixo.
+
+O bônus prático: se o regime normal é aproximadamente gaussiano, a soma de $k$
+coordenadas padronizadas ao quadrado segue uma distribuição **qui-quadrado** com
+$k$ graus de liberdade. Isso dá um limiar *fechado* para a T², sem precisar de
+percentil empírico:
+
+$$
+T^2 \sim \chi^2_{k} \quad\Longrightarrow\quad T^2_{\text{lim}} = \chi^2_{k,\,1-\alpha} .
+$$
+
+Escolhe-se um nível de significância $\alpha$ (digamos, $1\%$) e lê-se o limiar na
+tabela da qui-quadrado. O SPE tem um resultado análogo (a aproximação de
+Jackson-Mudholkar) quando os resíduos são aproximadamente normais.
+
+> **A ressalva sincera:** dados de sensores reais quase nunca são gaussianos
+> perfeitos: há assimetria, múltiplos regimes de operação e correlação temporal.
+> Por isso, na dúvida, o **percentil empírico** que usei na Seção 6 costuma ser mais
+> robusto que o limiar teórico da qui-quadrado. A distribuição normal não é uma
+> exigência; é a lente que explica *por que* distâncias ao quadrado e cortes na
+> cauda detectam anomalia.
+
+## 10. Domando ruído, outliers e falsos alarmes
+
+Tudo até aqui assumiu dados comportados. Na operação real, é o **ruído**, os
+**outliers** e os **regimes de exceção** que geram falsos positivos, e nada mata
+mais rápido a confiança numa sala de controle do que um alarme que "grita à toa".
+Os passos abaixo separam um protótipo de um detector que a equipe respeita.
+
+### Ruído: suavize o sinal e a estatística
+
+Um único minuto ruidoso não é falha. Antes de comparar com o limiar, suavize a
+própria estatística (SPE/T²) com uma janela móvel; a **mediana** é mais robusta a
+picos do que a média:
+
+```python
+spe_s = pd.Series(spe).rolling(15, center=True).median()   # ou .ewm(span=15).mean()
+alarm = spe_s > thr
+```
+
+Suavizar a estatística (e não só o sinal bruto) remove os espinhos sem atrasar a
+tendência de subida que de fato importa.
+
+### Outliers no treino: estatísticas robustas
+
+O modelo é tão bom quanto o "normal" que você mostrou. Se o trecho de treino
+contém glitches ou anomalias não rotuladas, a média e o desvio se contaminam e o
+limiar incha. Troque o `StandardScaler` por um **robusto** (mediana e IQR) e
+**lave** o conjunto normal iterativamente:
+
+```python
+from sklearn.preprocessing import RobustScaler
+
+scaler = RobustScaler().fit(normal)        # mediana/IQR: resiste a outliers
+clean = normal.copy()
+
+for _ in range(2):                          # remove do treino o que o próprio modelo já acha anômalo
+    Z = scaler.transform(clean)
+    pca = PCA(n_components=0.95).fit(Z)
+    spe_tr = np.sum((Z - pca.inverse_transform(pca.transform(Z))) ** 2, axis=1)
+    clean = clean[spe_tr < np.percentile(spe_tr, 99)]
+```
+
+Para a T², o análogo é estimar a covariância de forma robusta (`MinCovDet`, do
+`sklearn.covariance`), que ignora os pontos extremos ao definir o elipsoide.
+
+### Exceções: regimes de operação e buracos nos dados
+
+A máquina tem modos legítimos (partida, parada, troca de carga), cada um com a sua
+própria correlação. Tratá-los como um bloco só enche o monitoramento de falsos
+alarmes nos transientes, um problema grande o bastante para ter seção própria: é o
+tema da **Seção 11**. Fica aqui o cuidado de dados que ainda não cobri: um sensor
+que cai (NaN) não pode virar zero nem derrubar a leitura inteira: impute janelas
+curtas ou mascare aquele sensor.
+
+### Falsos positivos: confirme antes de alarmar
+
+A regra de ouro: **um ponto não é um alarme**. As travas mais eficazes:
+
+- **Persistência (M de N).** Só dispare após N leituras seguidas acima do limiar;
+  é o controle que você acabou de testar no gráfico da Seção 5. Mata o pico isolado.
+
+```python
+N = 5
+alarm = (spe_s > thr).rolling(N).sum().eq(N)   # N leituras seguidas
+```
+
+- **Histerese.** Use um limiar para *ligar* o alarme e outro, mais baixo, para
+  *desligar*, assim ele não "pisca" em torno do corte.
+- **Orçamento de alarmes.** Calibre o limiar num período normal separado mirando
+  uma taxa tolerável (ex.: ≤ 1 alarme/mês), em vez de um percentil mágico.
+- **Concordância.** Exija SPE *e* T² (ou SPE com uma contribuição coerente) antes
+  de escalar para a manutenção.
+- **Validação temporal.** Nunca embaralhe a série: separe treino e teste **por
+  tempo**. Embaralhar vaza o futuro e faz você subestimar os falsos positivos,
+  até porque leituras vizinhas são autocorrelacionadas (mais um motivo para o
+  percentil empírico e a persistência, em vez do limiar teórico da qui-quadrado).
+
+Cada passo troca um pouco de sensibilidade por confiabilidade. O alvo não é zero
+alarme nem detecção instantânea: é o detector em que a operação confia o
+suficiente para **agir**.
+
+## 11. E os estados da máquina? Parada, partida, transição e regime
+
+Falei de "regime normal" como se fosse um bloco único. Não é. Uma máquina
+atravessa **estados dinâmicos** bem distintos, e cada um tem a sua própria
+estrutura de correlação, ou seja, a sua própria "superfície normal":
+
+- **Parada.** Sensores em repouso. Não é operação: incluir esse trecho no treino
+  polui o modelo. Aqui faz sentido outro tipo de checagem (vazamento com a bomba
+  desligada, temperatura residual), não o detector de regime.
+- **Subtransitória (instantes iniciais).** A partida: corrente de inrush, picos de
+  pressão, **variância altíssima** e curtíssima duração. É violenta, mas legítima.
+- **Transitória (intermediária).** A máquina acomodando-se rumo ao ponto de
+  operação: tudo ainda mudando, derivando.
+- **Regime permanente (fase final).** Operação estável. É aqui que o SPE e a T²
+  brilham, porque a correlação entre sensores fica bem definida.
+
+O problema: cada estado tem média, covariância e **direções principais
+diferentes**. Um PCA único ou é dominado pela variância gigante da partida (e fica
+cego no permanente), ou é treinado no permanente e então **acusa toda partida como
+anomalia**. Repare que a partida *quebra* a correlação do permanente: então acende
+principalmente o **SPE** (resíduo alto); o quadrante "T² alto, SPE baixo" do mapa da
+Seção 8 é o outro caso, um regime válido raro (carga alta) que preserva a correlação.
+Alterne as estratégias abaixo e veja os falsos alarmes dos transientes aparecerem
+e sumirem:
+
+<RegimeStates client:visible />
+
+As saídas, em ordem de robustez:
+
+- **Gating por estado.** Primeiro identifique o estado atual, por regras sobre uma
+  variável de operação (RPM, potência, vazão) ou por *clustering*, e só então
+  roteie a leitura para o modelo certo. Parada nem entra no detector.
+- **Um modelo por regime.** Um PCA + limiar para cada estado em operação. A versão
+  principiada é uma **mistura de PCA probabilístico** (mixture of PPCA), que
+  aprende os regimes e o modelo de cada um de uma vez.
+- **Excluir/silenciar transientes.** Treine só no permanente e suprima (ou relaxe)
+  alarmes nas janelas conhecidas de partida e parada.
+- **Dynamic PCA (DPCA).** Aumente as variáveis com defasagens (valores de $t-1$,
+  $t-2$, …) para o modelo capturar a *dinâmica* dos transientes; também trata a
+  autocorrelação que mencionei na Seção 10.
+
+Em esqueleto, a rota de "um modelo por regime" é direta: descubra os estados em
+operação e ajuste um PCA para cada um.
+
+```python
+from sklearn.cluster import KMeans
+
+# "parada" NÃO é um rótulo do dataset (machine_status só tem NORMAL/BROKEN/RECOVERING).
+# O repouso se detecta por uma variável de operação perto de zero, não pelo rótulo.
+op = X["sensor_00"]                          # proxy de operação (vazão/rotação; escolha o seu)
+em_operacao = X[op > op.quantile(0.05)]      # descarta o estado de repouso
+
+regime = KMeans(n_clusters=3, n_init=10).fit_predict(em_operacao)  # partida/transição/permanente
+
+modelos = {}
+for r in set(regime):
+    bloco = em_operacao[regime == r]
+    sc = RobustScaler().fit(bloco)
+    modelos[r] = (sc, PCA(n_components=0.95).fit(sc.transform(bloco)))
+
+# em produção: classifique o estado da leitura e use o (scaler, pca) daquele regime
+```
+
+A lição: trate **"normal" no plural**. Um detector que ignora os estados da máquina
+não está medindo anomalia: está medindo a diferença para o regime permanente, e
+chamando partida de falha.
+
+## 12. Janelamento: amostragem, janela e cadência
+
+Sim, em produção você não acompanha um fluxo infinito ponto a ponto; processa
+**lotes** (janelas) de dados. Mas "janelamento" mistura **três relógios
+independentes**, e a maior parte da confusão vem de tratá-los como um só:
+
+<Windowing />
+
+1. **Amostragem ($\Delta t$)**: de quanto em quanto tempo o dado *nasce* (no
+   dataset, 1/min).
+2. **Janela ($W$)**: quanto de histórico entra numa decisão (para extrair atributos
+   ou para suavizar a estatística).
+3. **Passo / cadência ($S$)**: de quanto em quanto tempo *sai* uma decisão. Em
+   lote, você processa a última janela $W$ a cada passo $S$.
+
+Suas duas perguntas são, na verdade, sobre os relógios 1 e 2.
+
+### Qual o intervalo de geração dos dados ($\Delta t$)?
+
+Governado pela **física da falha**, não por gosto. Três critérios:
+
+- **Nyquist.** Para capturar uma dinâmica de frequência $f_{\max}$, amostre a pelo
+  menos o dobro dela: $\Delta t \le \frac{1}{2 f_{\max}}$. Vibração de mancal vive em
+  kHz → exige aquisição rápida (ou extração de atributos de alta taxa); incrustação
+  e desgaste evoluem em horas/dias → 1/min sobra.
+- **Tempo de decorrelação.** Calcule a autocorrelação (ACF) do sinal: o atraso em
+  que ela cai a $\approx 1/e$ é o tempo que uma amostra leva para "esquecer" a
+  anterior. Amostrar muito mais rápido que isso só gera redundância, não informação.
+- **Constante de tempo da falha ($\tau$).** Para pegar uma degradação com constante
+  $\tau$, precisa de $\Delta t \ll \tau$. Como falhas diferentes vivem em escalas
+  diferentes, o normal é **rodar vários monitores em paralelo**: um rápido (s/min)
+  para falhas abruptas, um lento (h/dias) para incrustação gradual.
+
+### Qual o tamanho da janela ($W$)?
+
+Aqui há um **trade-off estatístico explícito**, espremido entre um piso e um teto:
+
+- **Piso, estimabilidade.** Para estimar a covariância de $d$ sensores de forma
+  estável, a janela precisa de amostras suficientes. Regra de bolso: $N \gtrsim 10\,d$
+  (≈ 500 amostras para 51 sensores). Curta demais → covariância mal-condicionada e
+  PCA instável.
+- **Teto, estacionariedade.** A janela tem de caber **dentro de um regime estável**
+  (Seção 11): se ela atravessa partida → permanente, mistura estados e o modelo não
+  descreve nenhum.
+- **Correção pela autocorrelação.** Amostras vizinhas não são independentes; para um
+  AR(1) com autocorrelação $\rho$, o tamanho *efetivo* é
+
+$$
+N_{\text{eff}} = N\,\frac{1-\rho}{1+\rho} .
+$$
+
+  Sinal muito autocorrelacionado ($\rho$ alto) → precisa de uma janela bem maior
+  para a mesma potência estatística.
+- **O coração: variância vs atraso.** Janela longa suaviza a estatística (menos
+  alarmes falsos), mas **atrasa** a detecção e pode borrar a falha; janela curta
+  detecta rápido, ao custo de ruído. Arraste $W$ e veja o conflito, e o mínimo do
+  custo combinado:
+
+<WindowTradeoff client:visible />
+
+Como **escolher de fato**, com rigor:
+
+- **Varredura com validação temporal.** Trate $W$ (e $\Delta t$, e o $M$ de $N$ da
+  persistência) como hiperparâmetros: varra valores e avalie nas **falhas
+  históricas**, medindo antecedência × taxa de alarme falso (curva ROC/PR ou um
+  custo). Escolha o $W$ de maior antecedência dentro do orçamento de alarmes, sem
+  embaralhar a série (Seção 10).
+- **Estabilidade do subespaço.** Aumente a janela de treino até que os autovetores,
+  a variância explicada e o limiar **parem de mudar**. Subespaço estável = dado
+  suficiente.
+- **ARL alvo (controle estatístico).** O *Average Run Length* liga limiar e
+  suavização à taxa de alarme falso. Ajuste a suavização (ex.: o $\lambda$ do EWMA)
+  para um $\text{ARL}_0$ alvo, digamos, um alarme falso a cada seis meses.
+
+### A mecânica: lote vs streaming
+
+É o **mesmo detector**: o que muda é o modo de operação, e com ele a latência, a
+memória e a complexidade de infraestrutura. Há três arranjos.
+
+#### Streaming (online): uma amostra por vez
+
+Você atualiza a estatística a cada leitura que chega, carregando o estado de forma
+recursiva. Latência mínima e custo constante por amostra. O instrumento canônico é
+o **EWMA** (média móvel exponencialmente ponderada):
+
+$$
+s_t = \lambda\,x_t + (1-\lambda)\,s_{t-1}, \qquad 0 < \lambda \le 1 .
+$$
+
+O $\lambda$ é o **fator de esquecimento**. Desenrolando a recursão, o peso de uma
+amostra de $k$ passos atrás é $\lambda(1-\lambda)^k$: os pesos decaem
+geometricamente e somam 1, então o passado é esquecido de forma suave e exponencial.
+
+O segredo do streaming está aqui: o EWMA guarda **só** $s_{t-1}$, não um buffer das
+últimas $W$ amostras como uma janela móvel exigiria. É $O(1)$ de memória e de
+cálculo. E escolher $\lambda$ **é** escolher a janela, pela equivalência com a média
+móvel simples:
+
+$$
+\lambda \approx \frac{2}{W+1} \;\Longleftrightarrow\; W \approx \frac{2-\lambda}{\lambda}, \qquad \text{atraso médio} \approx \frac{1-\lambda}{\lambda} .
+$$
+
+Como carta de controle, a variância do EWMA encolhe para
+$\sigma_s^2 = \sigma^2\,\frac{\lambda}{2-\lambda}$, dando limites de controle
+$\pm L\,\sigma\sqrt{\lambda/(2-\lambda)}$: $\lambda$ menor aperta os limites (menos
+alarme falso) mas reage mais devagar: é o mesmo trade-off da janela, agora no
+filtro. Mexa no $\lambda$ e veja:
+
+<EwmaSmoothing client:visible />
+
+O EWMA é ótimo para **desvios pequenos e persistentes**: exatamente a rampa de
+degradação. Para um **degrau abrupto**, o irmão certo é o **CUSUM**, que acumula
+desvios e dispara com o menor atraso possível (resultado de Page):
+
+$$
+C_t = \max\!\left(0,\; C_{t-1} + (x_t - \mu_0) - k\right), \qquad \text{alarme se } C_t > h .
+$$
+
+Como o SPE e a T² já são escalares, aplica-se EWMA ou CUSUM **diretamente sobre
+eles** (ou um MEWMA sobre o vetor de scores, se quiser tratar o multivariado de uma
+vez).
+
+#### Micro-lote: um bloco por passo
+
+A cada passo $S$, processe a última janela $W$; a sobreposição é $W-S$. Dois extremos:
+$S=1$ desliza a cada amostra (responsividade máxima, custo máximo); $S=W$ são janelas
+justapostas (*tumbling*, mais baratas, cadência mais grossa). Pontos-chave:
+
+- **Latência.** Uma falha logo após a fronteira do lote espera até $S$ para ser vista:
+  o passo $S$ é o teto da latência de pior caso.
+- **Custo $\propto 1/S$.** Mais sobreposição = mais recomputação.
+- **Por que é o padrão.** Os dados costumam chegar em blocos (varredura SCADA, arquivos),
+  e bibliotecas vetorizadas processam o lote de uma vez. Operacionalmente, é um *cron*.
+
+#### Modelo adaptativo: para a deriva lenta
+
+Envelhecimento de sensor, sazonalidade (temperatura ambiente) e incrustação "normal"
+deslocam lentamente o regime normal; um modelo estático acumula falsos alarmes ao
+longo de meses. A adaptação re-treina o modelo continuamente: a covariância recursiva
+com fator de esquecimento $\gamma$ é o mesmo EWMA aplicado à matriz de covariância:
+
+$$
+\Sigma_t = (1-\gamma)\,\Sigma_{t-1} + \gamma\,(x_t - \boldsymbol{\mu})(x_t - \boldsymbol{\mu})^{\top} ,
+$$
+
+re-derivando os autovetores (e o limiar, que também deriva). Duas travas inegociáveis:
+
+- **Congele durante o alarme.** Adapte **só** em dados confirmados normais; se o modelo
+  continua aprendendo durante a anomalia, ele a absorve e fica cego (*model poisoning*).
+- **Separação de escalas.** A adaptação precisa ser mais lenta que a falha mais rápida
+  que você quer pegar e mais rápida que a deriva legítima:
+  $\tau_{\text{falha}} \ll \tau_{\text{adaptação}} \ll \tau_{\text{deriva}}$. O corolário
+  incômodo: uma falha **mais lenta** que a sua adaptação é invisível: o modelo a trata
+  como o novo normal.
+
+#### Qual escolher
+
+- Precisa de decisão por amostra / latência mínima → **streaming + EWMA**.
+- Decisão periódica basta e a infra é simples → **micro-lote** (um *cron*).
+- Há deriva lenta legítima → **adaptativo**, com as duas travas acima.
+- Arranjo comum em produção: micro-lote de 1 a 5 min + EWMA do SPE/T², com o modelo
+  estático re-treinado semanalmente em dados confirmados normais e a adaptação
+  congelada durante alarmes.
+
+Não existe "um" tamanho: há três relógios, cada um amarrado a um fenômeno diferente,
+a dinâmica da falha (Δt), a estabilidade estatística e o regime (W) e o custo
+operacional (S). A resposta honesta: **caracterize a constante de tempo da falha que
+você quer pegar, garanta $N \gtrsim 10\,d$ amostras estáveis na janela, e calibre o
+resto varrendo contra as falhas históricas.**
+
+## 13. Custo de hardware: dimensionando o embarcado
+
+O detector vai num computador embarcado: RAM e CPU limitadas, energia contada e
+(quase sempre) sem GPU. A boa notícia: PCA é **barato**. Mas para dimensionar com
+honestidade você precisa separar duas fases de perfil oposto e saber qual recurso
+cada uma puxa. Use $d$ = sensores, $k$ = componentes retidos, $N$ = amostras de
+treino, $W$ = janela, $b$ = bytes por número (4 em float32).
+
+### Duas fases, dois perfis
+
+- **Treino (raro, pesado).** Monta a covariância e decompõe. Roda offline ou
+  periodicamente, idealmente **fora** do embarcado.
+- **Inferência (sempre, leve).** Pontua cada leitura nova. É o que tem de caber no
+  orçamento contínuo do dispositivo.
+
+### O que consome o quê
+
+- **CPU:** dominada pelo **treino**, $O(N d^2 + d^3)$ (covariância + decomposição).
+  A inferência é desprezível: $O(d k)$ por amostra.
+- **RAM:** dominada pelos **buffers**: a janela ocupa $W \cdot d$ números; no treino,
+  somam-se o bloco de dados $N \cdot d$ e a covariância $d^2$. O modelo em si são KBs.
+- **GPU:** **nenhuma**. Nessas dimensões ($d$ na casa das dezenas, $k$ ~10) as
+  matrizes são minúsculas: o overhead de lançar kernel e transferir dados custa mais
+  que a conta. GPU só compensa com $d$ enorme (milhares) ou modelos profundos
+  (autoencoders); em embarcado, aqui, é silício e energia jogados fora.
+- **Memória física:** o **modelo persiste em Flash/ROM** (KBs); a **RAM** é o
+  gargalo (buffers + scratch). Em microcontrolador não há swap → RAM é teto duro; em
+  SBC Linux, evite o swap, que destrói a latência.
+
+### As fórmulas (consumo de pico)
+
+Inferência, por amostra e sustentada (a $f_s$ amostras/s):
+
+$$
+C_{\text{inf}} \approx 4\,d\,k \;\text{FLOPs/amostra}, \qquad \dot{C}_{\text{inf}} \approx 4\,d\,k\,f_s .
+$$
+
+$$
+M_{\text{inf}} \approx b\,\underbrace{(d k + 3d + k)}_{\text{modelo + scratch}} \;+\; b\,\underbrace{W d}_{\text{buffer de janela}} .
+$$
+
+Treino, por re-treino:
+
+$$
+C_{\text{tr}} \approx N d^2 + d^3 \;\text{FLOPs}, \qquad M_{\text{tr}} \approx b\,(N d + d^2) .
+$$
+
+O pico de RAM é o maior entre as fases, com margem para SO, pilha e fragmentação:
+
+$$
+M_{\text{pico}} \approx 1{,}7 \times \max\!\left(M_{\text{inf}},\, M_{\text{tr}}\right) .
+$$
+
+Se você treina **fora** do embarcado (o recomendado), $M_{\text{tr}}$ sai da conta e
+$M_{\text{pico}} \approx 1{,}7\,M_{\text{inf}}$. Em **DPCA** com $L$ defasagens, troque
+$d$ por $d(L+1)$ em todas as fórmulas: o custo cresce rápido.
+
+### Calculadora de dimensionamento
+
+Pluga os seus números:
+
+<HardwareBudget client:visible />
+
+Para a bomba ($d=51$, os 52 sensores menos o `sensor_15` vazio, $k=10$,
+$N=10\,000$, $W=500$, float32): o modelo são ~2,4 KB,
+o buffer de janela ~100 KB, o treino ~2 MB; a inferência custa ~2 mil FLOPs por
+amostra (≈ 34 FLOP/s a 1/min). Ou seja: a **inferência cabe folgada num
+microcontrolador**; é o treino que pede mais, então treine offline e embarque só os
+pesos.
+
+### Apertando o orçamento
+
+- **EWMA puro** (sem buffer de janela) zera o termo $W d$, o maior da inferência.
+- **Treine fora, embarque os pesos** ($P, \mu, \sigma, \lambda$): elimina $N d$ e o
+  $d^3$ do dispositivo.
+- **float32 em vez de float64** corta RAM e banda pela metade; quantização (int8) vai
+  além quando a precisão permite.
+- **Reduza $k$ e selecione sensores ($d$)**: o custo cai proporcional a $d k$.
+- **DPCA só se necessário:** cada defasagem multiplica tudo por $(L+1)$.
+
+## 14. Os outputs: tudo que o detector produz
+
+Para fechar, o inventário do que **sai** do sistema. Importa por dois motivos: ele é
+o **contrato de dados** (o que logar, transmitir e guardar) e amarra de volta ao
+orçamento de hardware: cada output persistido custa banda e armazenamento. Convém
+agrupar por natureza.
+
+### Outputs matemáticos: o modelo (uma vez por treino)
+
+Os parâmetros aprendidos. É só isto que se embarca (poucos KB, Seção 13).
+
+| Output | Símbolo | Forma | Uso |
+|---|---|---|---|
+| Vetor de médias | μ̄ | d | centrar a leitura |
+| Escalas (ou IQR) | σ | d | padronizar (escore-z) |
+| Loadings (autovetores) | P | d×k | projetar e reconstruir |
+| Variância dos componentes | λᵢ | k | normalizar a T² |
+| Nº de componentes | k | escalar | dimensão do modelo |
+| Limiares | SPE_lim, T²_lim | escalar(es) | decidir alarme (um par por regime, se houver) |
+| Estado de suavização | λ, sₜ (EWMA) | escalar | streaming recursivo |
+| Metadados | n/a | n/a | lista de sensores, regime, versão/hash, janela de treino |
+
+### Outputs de dados: por amostra (streaming)
+
+Derivados de cada leitura nova. A maioria é **efêmera** (intermediária, descartada); só alguns valem o log.
+
+| Output | Símbolo | Forma | Persistência | Uso |
+|---|---|---|---|---|
+| Leitura padronizada | z | d | efêmero | entrada do modelo |
+| Scores (coords. nos PCs) | t | k | opcional | visualização, clustering de regime |
+| Reconstrução | x̂ | d | efêmero | calcular o resíduo |
+| Resíduo | r = x − x̂ | d | efêmero | contribuições |
+| Erro de reconstrução | SPE | escalar | **logar** | detecção (fora do modelo) |
+| Hotelling | T² | escalar | **logar** | detecção (dentro do modelo) |
+| Estatística suavizada | EWMA(SPE/T²) | escalar | **logar** | decisão estável |
+| Flags | SPE>lim, T²>lim | bool | derivável | gatilho de alarme |
+
+### Outputs de decisão e diagnóstico: por evento
+
+Emitidos quando um alarme é **confirmado** (após a persistência): baratos, porque acontecem raramente.
+
+| Output | Forma | Conteúdo |
+|---|---|---|
+| Evento de alarme | registro | timestamp · estatística que disparou · severidade (quão acima do limiar) · regime no instante |
+| Contribuições cⱼ | d | ranking dos sensores que mais somaram ao SPE, só no alarme, para poupar banda |
+| Antecedência | escalar | tempo até a falha rotulada (na avaliação) |
+
+### Outputs agregados e operacionais: tendência e saúde
+
+- **Índice de saúde:** a própria curva suavizada de SPE/T² é o *condition indicator*; é o que vai num painel de operação.
+- **Taxa de alarmes / ARL observado:** para auditar o detector (está gritando à toa, ou está mudo?).
+- **Deriva do modelo:** distância entre o modelo atual e um recomputado; quando cresce, dispara o re-treino.
+- **Vida útil restante (RUL):** *derivado e opcional*; **não sai direto do PCA**. Constrói-se extrapolando a tendência do índice de saúde até o cruzamento do limiar, ou com um prognóstico à parte. O PCA entrega o indicador, não o prazo.
+
+### Outputs de avaliação: offline, na validação
+
+Não saem em produção; saem quando você calibra o sistema contra as falhas históricas
+(Seções 5 e 12): **curvas ROC/PR**, **distribuição de antecedência**, **taxa de
+falso-alarme por limiar**, **ARL₀** e a matriz de confusão contra os rótulos.
+
+### A taxonomia geral
+
+Generalizando para qualquer pipeline de dados/matemática desse tipo, todo output se
+classifica em quatro eixos, e é por eles que você decide o que fazer com cada um:
+
+- **Natureza:** paramétrico (o modelo), por-amostra (derivados de cada leitura), de
+  evento (alarmes), agregado (tendências/índices) ou de avaliação (métricas).
+- **Forma:** escalar, vetor ($d$ ou $k$) ou matriz ($d\times k$, $d\times d$).
+- **Frequência:** por-treino, por-amostra, por-janela ou por-evento.
+- **Persistência:** efêmero (descartado), logado (*historian*) ou transmitido (telemetria).
+
+O custo amarra tudo de volta à Seção 13: logar SPE + T² por amostra são ~2 floats/min
+(nada); os scores, $k$ floats; o vetor de contribuições, $d$ floats, mas só no
+alarme. O erro comum é guardar resíduo e reconstrução por amostra ($2d$ floats cada)
+e estourar o armazenamento sem ganho. O padrão enxuto: **SPE/T² (+ EWMA) sempre,
+scores se quiser, contribuições só quando dispara.**
+
+## 15. O que levar daqui
+
+- **Anomalia pede não-supervisionado.** Falha é rara e variada demais para um
+  classificador supervisionado; modele o normal e sinalize o desvio: pega até o
+  que nunca apareceu antes.
+- **Sensores são correlacionados:** por isso os dados cabem numa superfície de
+  poucas dimensões, e o PCA a encontra.
+- **Treine só no normal.** O detector precisa ignorar a falha durante o ajuste.
+- **Padronize sempre.** Caso contrário o PCA escuta só o sensor mais barulhento.
+- **Erro de reconstrução = distância ao normal.** Baixo é saudável; uma rampa
+  para cima é degradação.
+- **O limiar é decisão operacional**, calibrada no regime normal pelo custo de
+  errar para cada lado.
+- **A distribuição normal é a lente teórica.** Ela explica o corte na cauda
+  (percentil ≈ $k\sigma$) e dá o limiar fechado da T² via qui-quadrado, mas com
+  dados reais, o percentil empírico costuma ser mais robusto.
+- **SPE + T²** cobrem desvios diferentes; use os dois.
+- **Detecção ≠ diagnóstico.** O alarme é agregado; para saber *qual* sensor
+  disparou, decomponha o erro por sensor (análise de contribuição).
+- **Robustez separa protótipo de produção.** Suavize a estatística, use escala e
+  covariância robustas, segmente regimes de operação e confirme alarmes com
+  persistência: é o que evita ruído, outliers e falsos positivos.
+- **"Normal" é plural.** Parada, partida, transição e regime permanente têm
+  correlações diferentes; use um modelo por estado, não um modelo médio que chama
+  partida de falha.
+- **Janelamento são três relógios.** Amostragem (Δt, pela física da falha via
+  Nyquist/decorrelação), janela (W, entre $N\gtrsim 10d$ e a estacionariedade do
+  regime, com o trade-off variância × atraso) e cadência (S, pelo custo), cada um
+  escolhido por um critério próprio.
+- **EWMA = streaming com janela embutida.** Filtro recursivo $O(1)$ onde escolher
+  $\lambda$ é escolher a janela; CUSUM para degraus abruptos. Em modelo adaptativo,
+  congele a atualização durante alarmes e respeite a separação de escalas.
+- **Embarcado: inferência é grátis, treino é o custo.** Inferência $O(dk)$ (~KBs de
+  modelo, sem GPU); o que pesa é o buffer $W d$ e o treino $O(Nd^2+d^3)$. Treine fora,
+  embarque os pesos, e dimensione a RAM em ~1,7× o pico.
+- **Os outputs são o contrato de dados.** Modelo (μ̄, σ, P, λ, limiares) por treino;
+  SPE/T² por amostra; contribuições e evento só no alarme; índice de saúde e métricas
+  de avaliação à parte. Persista pelo custo: SPE/T² sempre, o resto sob demanda.
+
+O PCA não é o detector mais sofisticado: autoencoders e modelos temporais vão
+além. Mas é barato, interpretável e roda perto do sensor. Para a maioria das
+estações de bombeamento, é exatamente o suficiente.
+
+## 16. Referências
+
+Cada afirmação, fórmula e tabela deste artigo se apoia na literatura canônica de
+quimiometria, controle estatístico de processos e estatística multivariada. As
+referências abaixo foram verificadas (autor, ano, veículo, DOI); cada entrada
+aponta a(s) seção(ões) que sustenta.
+
+### PCA e monitoramento estatístico multivariado (MSPC)
+
+- Pearson, K. (1901). "On lines and planes of closest fit to systems of points in space." *Philosophical Magazine* 2(11), 559 a 572. DOI [10.1080/14786440109462720](https://doi.org/10.1080/14786440109462720). §3
+- Hotelling, H. (1933). "Analysis of a complex of statistical variables into principal components." *Journal of Educational Psychology* 24(6), 417 a 441. DOI [10.1037/h0071325](https://doi.org/10.1037/h0071325). §3
+- Jolliffe, I. T. (2002). *Principal Component Analysis*, 2ª ed. Springer. DOI [10.1007/b98835](https://doi.org/10.1007/b98835). §§3, 4, 6
+- Jackson, J. E. (1991). *A User's Guide to Principal Components*. Wiley. DOI [10.1002/0471725331](https://doi.org/10.1002/0471725331). §§6, 8
+- Kourti, T., & MacGregor, J. F. (1995). "Process analysis, monitoring and diagnosis, using multivariate projection methods." *Chemometrics and Intelligent Laboratory Systems* 28(1), 3 a 21. DOI [10.1016/0169-7439(95)80036-9](https://doi.org/10.1016/0169-7439(95)80036-9). §§6, 7
+- Wise, B. M., & Gallagher, N. B. (1996). "The process chemometrics approach to process monitoring and fault detection." *Journal of Process Control* 6(6), 329 a 348. DOI [10.1016/0959-1524(96)00009-1](https://doi.org/10.1016/0959-1524(96)00009-1). §§5, 6
+- Qin, S. J. (2003). "Statistical process monitoring: basics and beyond." *Journal of Chemometrics* 17(8 a 9), 480 a 502. DOI [10.1002/cem.800](https://doi.org/10.1002/cem.800). §§6, 8
+
+### Estatísticas de detecção e diagnóstico (SPE/Q, T², Mahalanobis, contribuições)
+
+- Jackson, J. E., & Mudholkar, G. S. (1979). "Control procedures for residuals associated with principal component analysis." *Technometrics* 21(3), 341 a 349. DOI [10.1080/00401706.1979.10489779](https://doi.org/10.1080/00401706.1979.10489779). §§6, 9 (SPE/Q e seu limiar)
+- Hotelling, H. (1931). "The generalization of Student's ratio." *Annals of Mathematical Statistics* 2(3), 360 a 378. DOI [10.1214/aoms/1177732979](https://doi.org/10.1214/aoms/1177732979). §8 (T²)
+- Mahalanobis, P. C. (1936). "On the generalised distance in statistics." *Proceedings of the National Institute of Sciences of India* 2(1), 49 a 55. §§8, 9
+- Mason, R. L., & Young, J. C. (2002). *Multivariate Statistical Process Control with Industrial Applications*. SIAM. DOI [10.1137/1.9780898718461](https://doi.org/10.1137/1.9780898718461). §8
+- Miller, P., Swanson, R. E., & Heckler, C. E. (1998). "Contribution plots: a missing link in multivariate quality control." *Applied Mathematics and Computer Science* 8(4), 775 a 792. §7
+- Westerhuis, J. A., Gurden, S. P., & Smilde, A. K. (2000). "Generalized contribution plots in multivariate statistical process monitoring." *Chemometrics and Intelligent Laboratory Systems* 51(1), 95 a 114. DOI [10.1016/S0169-7439(00)00062-9](https://doi.org/10.1016/S0169-7439(00)00062-9). §7 (contribuições e *smearing*)
+- Alcala, C. F., & Qin, S. J. (2009). "Reconstruction-based contribution for process monitoring." *Automatica* 45(7), 1593 a 1600. DOI [10.1016/j.automatica.2009.02.027](https://doi.org/10.1016/j.automatica.2009.02.027). §7
+- Van den Kerkhof, P., Vanlaer, J., Gins, G., & Van Impe, J. F. M. (2013). "Analysis of smearing-out in contribution plot based fault isolation for statistical process control." *Chemical Engineering Science* 104, 285 a 293. DOI [10.1016/j.ces.2013.08.007](https://doi.org/10.1016/j.ces.2013.08.007). §7 (*smearing effect*)
+
+### Probabilidade e estatística robusta
+
+- Johnson, R. A., & Wichern, D. W. (2007). *Applied Multivariate Statistical Analysis*, 6ª ed. Pearson. §9 (normal multivariada, expoente $-\tfrac12 D_M^2$, contornos elipsoidais, T²)
+- Anderson, T. W. (2003). *An Introduction to Multivariate Statistical Analysis*, 3ª ed. Wiley. §9
+- NIST/SEMATECH (2012). *e-Handbook of Statistical Methods*, §6.5.1. [itl.nist.gov](https://www.itl.nist.gov/div898/handbook/pmc/section5/pmc51.htm). §9 (regra 68-95-99,7)
+- Rousseeuw, P. J. (1984). "Least median of squares regression." *Journal of the American Statistical Association* 79(388), 871 a 880. DOI [10.1080/01621459.1984.10477105](https://doi.org/10.1080/01621459.1984.10477105). §10 (origem do MCD)
+- Rousseeuw, P. J., & Van Driessen, K. (1999). "A fast algorithm for the minimum covariance determinant estimator." *Technometrics* 41(3), 212 a 223. DOI [10.1080/00401706.1999.10485670](https://doi.org/10.1080/00401706.1999.10485670). §10 (covariância robusta)
+- Marchenko, V. A., & Pastur, L. A. (1967). "Distribution of eigenvalues for some sets of random matrices." *Matematicheskii Sbornik* 1(4), 457 a 483. DOI [10.1070/SM1967v001n04ABEH001994](https://doi.org/10.1070/SM1967v001n04ABEH001994). §12 (base teórica de amostra × dimensão)
+
+### Cartas de controle e detecção sequencial
+
+- Roberts, S. W. (1959). "Control chart tests based on geometric moving averages." *Technometrics* 1(3), 239 a 250. DOI [10.1080/00401706.1959.10489860](https://doi.org/10.1080/00401706.1959.10489860). §12 (EWMA)
+- Hunter, J. S. (1986). "The exponentially weighted moving average." *Journal of Quality Technology* 18(4), 203 a 210. DOI [10.1080/00224065.1986.11979014](https://doi.org/10.1080/00224065.1986.11979014). §12
+- Lucas, J. M., & Saccucci, M. S. (1990). "Exponentially weighted moving average control schemes: properties and enhancements." *Technometrics* 32(1), 1 a 12. DOI [10.1080/00401706.1990.10484583](https://doi.org/10.1080/00401706.1990.10484583). §12 (variância $\sigma^2\lambda/(2-\lambda)$, ARL)
+- Lowry, C. A., Woodall, W. H., Champ, C. W., & Rigdon, S. E. (1992). "A multivariate exponentially weighted moving average control chart." *Technometrics* 34(1), 46 a 53. DOI [10.1080/00401706.1992.10485232](https://doi.org/10.1080/00401706.1992.10485232). §12 (MEWMA)
+- Page, E. S. (1954). "Continuous inspection schemes." *Biometrika* 41(1 a 2), 100 a 115. DOI [10.1093/biomet/41.1-2.100](https://doi.org/10.1093/biomet/41.1-2.100). §12 (CUSUM)
+- Moustakides, G. V. (1986). "Optimal stopping times for detecting changes in distributions." *Annals of Statistics* 14(4), 1379 a 1387. DOI [10.1214/aos/1176350164](https://doi.org/10.1214/aos/1176350164). §12 (otimalidade do CUSUM)
+- Montgomery, D. C. *Introduction to Statistical Quality Control*. Wiley. §§5, 12 (CEP, ARL)
+
+### Modelos dinâmicos e adaptativos
+
+- Ku, W., Storer, R. H., & Georgakis, C. (1995). "Disturbance detection and isolation by dynamic principal component analysis." *Chemometrics and Intelligent Laboratory Systems* 30(1), 179 a 196. DOI [10.1016/0169-7439(95)00076-3](https://doi.org/10.1016/0169-7439(95)00076-3). §12 (DPCA)
+- Li, W., Yue, H. H., Valle-Cervantes, S., & Qin, S. J. (2000). "Recursive PCA for adaptive process monitoring." *Journal of Process Control* 10(5), 471 a 486. DOI [10.1016/S0959-1524(00)00022-6](https://doi.org/10.1016/S0959-1524(00)00022-6). §12 (modelo adaptativo)
+- Tipping, M. E., & Bishop, C. M. (1999). "Mixtures of probabilistic principal component analysers." *Neural Computation* 11(2), 443 a 482. DOI [10.1162/089976699300016728](https://doi.org/10.1162/089976699300016728). §11 (mistura de PPCA por regime)
+- Tipping, M. E., & Bishop, C. M. (1999). "Probabilistic principal component analysis." *Journal of the Royal Statistical Society B* 61(3), 611 a 622. DOI [10.1111/1467-9868.00196](https://doi.org/10.1111/1467-9868.00196). §11
+
+### Amostragem, séries temporais e validação
+
+- Shannon, C. E. (1949). "Communication in the presence of noise." *Proceedings of the IRE* 37(1), 10 a 21. DOI [10.1109/JRPROC.1949.232969](https://doi.org/10.1109/JRPROC.1949.232969). §12 (Nyquist-Shannon)
+- Nyquist, H. (1928). "Certain topics in telegraph transmission theory." *Transactions of the AIEE* 47(2), 617 a 644. DOI [10.1109/T-AIEE.1928.5055024](https://doi.org/10.1109/T-AIEE.1928.5055024). §12
+- Thiébaux, H. J., & Zwiers, F. W. (1984). "The interpretation and estimation of effective sample size." *Journal of Climate and Applied Meteorology* 23(5), 800 a 811. DOI [10.1175/1520-0450(1984)023](https://doi.org/10.1175/1520-0450(1984)023%3C0800:TIAEOE%3E2.0.CO;2). §12 ($N_{\text{eff}}$ sob autocorrelação)
+- Bergmeir, C., & Benítez, J. M. (2012). "On the use of cross-validation for time series predictor evaluation." *Information Sciences* 191, 192 a 213. DOI [10.1016/j.ins.2011.12.028](https://doi.org/10.1016/j.ins.2011.12.028). §§10, 12 (validação temporal)
+
+### Aprendizado de máquina: anomalia, novidade, desbalanceamento e não-linear
+
+- Chandola, V., Banerjee, A., & Kumar, V. (2009). "Anomaly detection: a survey." *ACM Computing Surveys* 41(3), Art. 15. DOI [10.1145/1541880.1541882](https://doi.org/10.1145/1541880.1541882). §1
+- Pimentel, M. A. F., Clifton, D. A., Clifton, L., & Tarassenko, L. (2014). "A review of novelty detection." *Signal Processing* 99, 215 a 249. DOI [10.1016/j.sigpro.2013.12.026](https://doi.org/10.1016/j.sigpro.2013.12.026). §1 (detecção de novidade / semi-supervisionada)
+- He, H., & Garcia, E. A. (2009). "Learning from imbalanced data." *IEEE Transactions on Knowledge and Data Engineering* 21(9), 1263 a 1284. DOI [10.1109/TKDE.2008.239](https://doi.org/10.1109/TKDE.2008.239). §1 (desbalanceamento de classes)
+- Schölkopf, B., Smola, A., & Müller, K.-R. (1998). "Nonlinear component analysis as a kernel eigenvalue problem." *Neural Computation* 10(5), 1299 a 1319. DOI [10.1162/089976698300017467](https://doi.org/10.1162/089976698300017467). §2 (kernel PCA / não-linear)
+- Hinton, G. E., & Salakhutdinov, R. R. (2006). "Reducing the dimensionality of data with neural networks." *Science* 313(5786), 504 a 507. DOI [10.1126/science.1127647](https://doi.org/10.1126/science.1127647). §§2, 15 (autoencoders)
+
+### Ferramentas, complexidade e normas
+
+- Pedregosa, F., et al. (2011). "Scikit-learn: machine learning in Python." *Journal of Machine Learning Research* 12, 2825 a 2830. [jmlr.org](https://www.jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf). §§6, 7, 10, 11 (PCA, StandardScaler, RobustScaler, KMeans, MinCovDet)
+- Golub, G. H., & Van Loan, C. F. (2013). *Matrix Computations*, 4ª ed. Johns Hopkins University Press. §13 (custos $O(d^3)$ e $O(Nd^2)$)
+- ANSI/ISA-18.2-2016, *Management of Alarm Systems for the Process Industries* (espelhada na IEC 62682:2022). International Society of Automation. §10 (histerese/*deadband*, *alarm flooding*, taxa de alarmes)
+- EEMUA Publication 191 (4ª ed., 2024), *Alarm Systems: A Guide to Design, Management and Procurement*. §10
+
+### Dataset
+
+- Phantawee, N. *Pump sensor data*. Kaggle. [kaggle.com/datasets/nphantawee/pump-sensor-data](https://www.kaggle.com/datasets/nphantawee/pump-sensor-data). Fonte primária: 52 sensores (`sensor_00` a `sensor_51`), 220.320 leituras a 1/min (~5 meses), `sensor_15` vazio, `machine_status` ∈ `NORMAL`/`BROKEN`/`RECOVERING`, 7 eventos `BROKEN`.
+
+### Nota de transparência: o que é heurística, não citação
+
+Em nome do rigor, três pontos do texto são **prática de engenharia** ou aproximações,
+não resultados com fonte primária única, e foram apresentados como tal:
+
+- **$N \gtrsim 10\,d$** (§12): regra de bolso de praticantes; o *princípio* (covariância
+  bem-condicionada exige amostra ≫ dimensão) tem base em Marchenko-Pastur (1967), e a
+  documentação do scikit-learn recomenda *shrinkage* quando $n$ não é $\gg d$, mas o
+  fator "10×" não tem fonte canônica única.
+- **$\lambda \approx 2/(W+1)$** (§12): convenção de *span* do EMA (análise técnica /
+  processamento de sinais; é o que o `pandas.ewm(span=)` usa); é aproximação útil, não
+  teorema de CEP.
+- **Sem GPU, margem de RAM ×1,7, orçamento de alarmes** (§§10, 13): recomendações de
+  engenharia, calibradas caso a caso, não teoremas.
+- **Percentil 99 ≈ $2{,}33\sigma$** (§9): quantil da normal padrão ($z_{0{,}99} \approx 2{,}326$),
+  fato matemático verificável em qualquer tabela, não uma citação.

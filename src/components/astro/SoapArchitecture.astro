@@ -1,0 +1,70 @@
+---
+// Arquitetura do soapbar: cliente e servidor sobre um core compartilhado.
+interface Props {
+  lang?: 'pt' | 'en';
+}
+const { lang = 'pt' } = Astro.props;
+
+const t = {
+  pt: {
+    server: 'Servidor',
+    client: 'Cliente',
+    envelope: '▼ envelope SOAP 1.1 / 1.2',
+    dispatch: 'dispatch · WS-Security · WS-Addressing · limites anti-DoS',
+    core: 'core compartilhado',
+    caption:
+      'Os cinco estilos de binding, a segurança e o parsing vivem num único core: o mesmo que atende cliente e servidor. Os clientes de domínio (contrib) são casca fina sobre ele.',
+  },
+  en: {
+    server: 'Server',
+    client: 'Client',
+    envelope: '▼ SOAP 1.1 / 1.2 envelope',
+    dispatch: 'dispatch · WS-Security · WS-Addressing · anti-DoS limits',
+    core: 'shared core',
+    caption:
+      'The five binding styles, security, and parsing all live in a single core: the same one that serves client and server. The domain (contrib) clients are a thin shell on top of it.',
+  },
+}[lang];
+
+const core = ['binding', 'envelope', 'types', 'wsdl', 'xml', 'fault'];
+const box = 'rounded-lg border border-border bg-bg px-4 py-2.5 text-center';
+const arrow = 'flex flex-col items-center py-1 text-muted';
+---
+
+<figure class="not-prose my-6 rounded-xl border border-border bg-surface p-5">
+  <div class="mx-auto flex max-w-lg flex-col items-stretch text-sm">
+    <div class="grid grid-cols-2 gap-3">
+      <div class={box}>
+        <div class="font-medium text-fg">{t.server}</div>
+        <div class="text-xs text-muted">AsgiSoapApp · WsgiSoapApp</div>
+      </div>
+      <div class={box}>
+        <div class="font-medium text-fg">{t.client}</div>
+        <div class="text-xs text-muted">SoapClient · contrib (VIES · WITSML · NF-e)</div>
+      </div>
+    </div>
+
+    <div class={arrow} aria-hidden="true">
+      <div class="h-3 w-px bg-border"></div>
+      <span class="text-[10px] leading-none">{t.envelope}</span>
+    </div>
+
+    <div class={box}>
+      <span class="font-medium text-fg">SoapApplication</span>
+      <p class="mt-0.5 text-xs text-muted">{t.dispatch}</p>
+    </div>
+
+    <div class={arrow} aria-hidden="true">
+      <div class="h-3 w-px bg-border"></div>
+      <span class="text-[10px] leading-none">▼</span>
+    </div>
+
+    <div class="rounded-lg border border-accent/40 bg-bg px-4 py-3">
+      <div class="text-center text-xs uppercase tracking-wide text-accent">{t.core}</div>
+      <div class="mt-2 flex flex-wrap justify-center gap-1.5">
+        {core.map((m) => <span class="badge border-border font-mono text-xs text-muted">{m}</span>)}
+      </div>
+    </div>
+  </div>
+  <figcaption class="mt-4 text-center text-xs text-muted">{t.caption}</figcaption>
+</figure>

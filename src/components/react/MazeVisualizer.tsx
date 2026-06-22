@@ -3,14 +3,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 /**
  * Compara algoritmos de busca sobre um mesmo labirinto, inteiramente no cliente.
  *
- * Geração por recursive backtracker; solvers BFS, DFS, Dijkstra, A* (Manhattan)
- * e greedy best-first compartilham o grid e expõem nós explorados vs. caminho.
- * A exploração é animada, ou desenhada de uma vez sob prefers-reduced-motion.
+ * Três geradores (recursive backtracker, Prim, Kruskal) e cinco solvers (BFS, DFS,
+ * Dijkstra, A* com heurística de Manhattan e greedy best-first). O solver escolhido
+ * é animado no canvas; a tabela abaixo roda todos no mesmo labirinto e mede nós
+ * explorados, tamanho do caminho e eficiência. Cores vindas dos tokens do tema.
  */
 
 type Cell = { walls: [boolean, boolean, boolean, boolean] }; // N,E,S,W
 type Grid = { cols: number; rows: number; cells: Cell[] };
 type Solver = 'bfs' | 'dfs' | 'dijkstra' | 'astar' | 'greedy';
+type GenAlgo = 'backtracker' | 'prim' | 'kruskal';
 
 const SOLVERS: { id: Solver; label: string }[] = [
   { id: 'bfs', label: 'BFS' },
@@ -20,9 +22,22 @@ const SOLVERS: { id: Solver; label: string }[] = [
   { id: 'greedy', label: 'Greedy' },
 ];
 
+const GENS: { id: GenAlgo; label: string }[] = [
+  { id: 'backtracker', label: 'Backtracker' },
+  { id: 'prim', label: 'Prim' },
+  { id: 'kruskal', label: 'Kruskal' },
+];
+
 const idx = (g: Grid, x: number, y: number) => y * g.cols + x;
 
-// ---- Geração: recursive backtracker (determinística por seed) ----------------
+const DIRS: [number, number, number, number][] = [
+  [0, -1, 0, 2], // N (remove parede 0 aqui, 2 no vizinho)
+  [1, 0, 1, 3], // E
+  [0, 1, 2, 0], // S
+  [-1, 0, 3, 1], // W
+];
+
+// Gerador congruente linear (determinístico por seed).
 function makeRng(seed: number) {
   let s = seed >>> 0;
   return () => {
@@ -31,28 +46,23 @@ function makeRng(seed: number) {
   };
 }
 
-function generate(cols: number, rows: number, seed: number): Grid {
-  const cells: Cell[] = Array.from({ length: cols * rows }, () => ({
-    walls: [true, true, true, true],
-  }));
-  const g: Grid = { cols, rows, cells };
+function emptyGrid(cols: number, rows: number): Grid {
+  return { cols, rows, cells: Array.from({ length: cols * rows }, () => ({ walls: [true, true, true, true] })) };
+}
+
+// ---- Geradores: cada um produz um labirinto perfeito (uma única solução) ------
+function generateBacktracker(cols: number, rows: number, seed: number): Grid {
+  const g = emptyGrid(cols, rows);
   const rng = makeRng(seed);
   const visited = new Array(cols * rows).fill(false);
   const stack: number[] = [0];
   visited[0] = true;
 
-  const dirs: [number, number, number, number][] = [
-    [0, -1, 0, 2], // N -> remove wall 0 here, wall 2 neighbor
-    [1, 0, 1, 3], // E
-    [0, 1, 2, 0], // S
-    [-1, 0, 3, 1], // W
-  ];
-
   while (stack.length) {
     const cur = stack[stack.length - 1];
     const cx = cur % cols;
     const cy = Math.floor(cur / cols);
-    const options = dirs.filter(([dx, dy]) => {
+    const options = DIRS.filter(([dx, dy]) => {
       const nx = cx + dx;
       const ny = cy + dy;
       return nx >= 0 && nx < cols && ny >= 0 && ny < rows && !visited[idx(g, nx, ny)];
@@ -62,15 +72,86 @@ function generate(cols: number, rows: number, seed: number): Grid {
       continue;
     }
     const [dx, dy, w, nw] = options[Math.floor(rng() * options.length)];
-    const nx = cx + dx;
-    const ny = cy + dy;
-    const next = idx(g, nx, ny);
-    cells[cur].walls[w] = false;
-    cells[next].walls[nw] = false;
+    const next = idx(g, cx + dx, cy + dy);
+    g.cells[cur].walls[w] = false;
+    g.cells[next].walls[nw] = false;
     visited[next] = true;
     stack.push(next);
   }
   return g;
+}
+
+function generatePrim(cols: number, rows: number, seed: number): Grid {
+  const g = emptyGrid(cols, rows);
+  const rng = makeRng(seed);
+  const visited = new Array(cols * rows).fill(false);
+  const frontier: { a: number; b: number; w: number; nw: number }[] = [];
+
+  const addEdges = (cell: number) => {
+    const cx = cell % cols;
+    const cy = Math.floor(cell / cols);
+    for (const [dx, dy, w, nw] of DIRS) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+        const b = idx(g, nx, ny);
+        if (!visited[b]) frontier.push({ a: cell, b, w, nw });
+      }
+    }
+  };
+
+  visited[0] = true;
+  addEdges(0);
+  while (frontier.length) {
+    const { a, b, w, nw } = frontier.splice(Math.floor(rng() * frontier.length), 1)[0];
+    if (visited[b]) continue;
+    g.cells[a].walls[w] = false;
+    g.cells[b].walls[nw] = false;
+    visited[b] = true;
+    addEdges(b);
+  }
+  return g;
+}
+
+function generateKruskal(cols: number, rows: number, seed: number): Grid {
+  const g = emptyGrid(cols, rows);
+  const rng = makeRng(seed);
+  const parent = Array.from({ length: cols * rows }, (_, i) => i);
+  const find = (x: number): number => {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  };
+
+  const edges: { a: number; b: number; w: number; nw: number }[] = [];
+  for (let i = 0; i < cols * rows; i++) {
+    const x = i % cols;
+    const y = Math.floor(i / cols);
+    if (x < cols - 1) edges.push({ a: i, b: i + 1, w: 1, nw: 3 }); // leste
+    if (y < rows - 1) edges.push({ a: i, b: i + cols, w: 2, nw: 0 }); // sul
+  }
+  for (let i = edges.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [edges[i], edges[j]] = [edges[j], edges[i]];
+  }
+  for (const { a, b, w, nw } of edges) {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) {
+      g.cells[a].walls[w] = false;
+      g.cells[b].walls[nw] = false;
+      parent[ra] = rb;
+    }
+  }
+  return g;
+}
+
+function generate(cols: number, rows: number, seed: number, algo: GenAlgo): Grid {
+  if (algo === 'prim') return generatePrim(cols, rows, seed);
+  if (algo === 'kruskal') return generateKruskal(cols, rows, seed);
+  return generateBacktracker(cols, rows, seed);
 }
 
 function neighbors(g: Grid, n: number): number[] {
@@ -87,8 +168,8 @@ function neighbors(g: Grid, n: number): number[] {
 
 // ---- Solvers: devolvem ordem de exploração + caminho final -------------------
 interface SolveResult {
-  order: number[]; // nós na ordem em que foram expandidos
-  path: number[]; // caminho start->goal
+  order: number[];
+  path: number[];
 }
 
 function manhattan(g: Grid, a: number, b: number) {
@@ -127,8 +208,7 @@ function solve(g: Grid, kind: Solver, start: number, goal: number): SolveResult 
     return { order, path: reconstruct(prev, goal) };
   }
 
-  // Dijkstra / A* / Greedy: fila de prioridade simples (array + sort).
-  const g_cost = new Map<number, number>([[start, 0]]);
+  const gCost = new Map<number, number>([[start, 0]]);
   const pq: { n: number; f: number }[] = [{ n: start, f: 0 }];
   const h = (n: number) => (kind === 'dijkstra' ? 0 : manhattan(g, n, goal));
 
@@ -138,12 +218,11 @@ function solve(g: Grid, kind: Solver, start: number, goal: number): SolveResult 
     order.push(cur);
     if (cur === goal) break;
     for (const nb of neighbors(g, cur)) {
-      const tentative = (g_cost.get(cur) ?? Infinity) + 1;
-      if (tentative < (g_cost.get(nb) ?? Infinity)) {
+      const tentative = (gCost.get(cur) ?? Infinity) + 1;
+      if (tentative < (gCost.get(nb) ?? Infinity)) {
         prev.set(nb, cur);
-        g_cost.set(nb, tentative);
-        const priority = kind === 'greedy' ? h(nb) : tentative + h(nb);
-        pq.push({ n: nb, f: priority });
+        gCost.set(nb, tentative);
+        pq.push({ n: nb, f: kind === 'greedy' ? h(nb) : tentative + h(nb) });
       }
     }
   }
@@ -155,22 +234,40 @@ const COLS = 20;
 const ROWS = 14;
 const SIZE = 22;
 
-export default function MazeVisualizer() {
+const STR = {
+  pt: { gen: 'Geração', algo: 'Algoritmo', newMaze: '↻ Novo labirinto', th: 'Algoritmo', explored: 'Explorados', path: 'Caminho', eff: 'Eficiência', legStart: 'início', legGoal: 'saída', legExplored: 'explorado', legPath: 'caminho' },
+  en: { gen: 'Generation', algo: 'Algorithm', newMaze: '↻ New maze', th: 'Algorithm', explored: 'Explored', path: 'Path', eff: 'Efficiency', legStart: 'start', legGoal: 'goal', legExplored: 'explored', legPath: 'path' },
+};
+
+export default function MazeVisualizer({ lang = 'pt' }: { lang?: 'pt' | 'en' }) {
+  const t = STR[lang];
   const [seed, setSeed] = useState(7);
   const [solver, setSolver] = useState<Solver>('astar');
+  const [gen, setGen] = useState<GenAlgo>('backtracker');
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number>(0);
   const reduced = usePrefersReducedMotion();
 
-  const grid = useMemo(() => generate(COLS, ROWS, seed), [seed]);
+  const grid = useMemo(() => generate(COLS, ROWS, seed, gen), [seed, gen]);
   const start = 0;
   const goal = COLS * ROWS - 1;
   const result = useMemo(() => solve(grid, solver, start, goal), [grid, solver]);
 
-  const metrics = {
-    explored: result.order.length,
-    pathLen: result.path.length,
-  };
+  // Roda todos os solvers no MESMO labirinto para a tabela comparativa.
+  const comparison = useMemo(
+    () =>
+      SOLVERS.map((s) => {
+        const r = solve(grid, s.id, start, goal);
+        return {
+          id: s.id,
+          label: s.label,
+          explored: r.order.length,
+          pathLen: r.path.length,
+          eff: Math.round((r.path.length / r.order.length) * 100),
+        };
+      }),
+    [grid],
+  );
 
   const draw = useCallback(
     (exploredUpTo: number) => {
@@ -178,23 +275,24 @@ export default function MazeVisualizer() {
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+      // Cores lidas dos tokens do tema atual (light, dark e coffee).
       const css = getComputedStyle(document.documentElement);
-      const isDark = document.documentElement.classList.contains('dark');
-      const wall = isDark ? '#a8a29e' : '#44403c';
-      const bg = isDark ? '#0c0a09' : '#fafaf9';
-      const accent = `rgb(${css.getPropertyValue('--accent') || '13 148 136'})`;
+      const triplet = (name: string, fb: string) => css.getPropertyValue(name).trim() || fb;
+      const rgb = (name: string, fb: string) => `rgb(${triplet(name, fb)})`;
+      const bg = rgb('--bg', '250 250 249');
+      const wall = rgb('--muted', '120 113 108');
+      const accent = rgb('--accent', '13 148 136');
+      const [ar, ag, ab] = triplet('--accent', '13 148 136').split(/\s+/);
 
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // células exploradas
-      ctx.fillStyle = isDark ? 'rgba(45,212,191,0.18)' : 'rgba(13,148,136,0.14)';
+      ctx.fillStyle = `rgba(${ar},${ag},${ab},0.16)`;
       for (let i = 0; i < exploredUpTo && i < result.order.length; i++) {
         const n = result.order[i];
         ctx.fillRect((n % COLS) * SIZE, Math.floor(n / COLS) * SIZE, SIZE, SIZE);
       }
 
-      // caminho final (só quando a exploração termina)
       if (exploredUpTo >= result.order.length) {
         ctx.fillStyle = accent;
         for (const n of result.path) {
@@ -202,13 +300,11 @@ export default function MazeVisualizer() {
         }
       }
 
-      // start / goal
       ctx.fillStyle = '#10b981';
       ctx.fillRect(2, 2, SIZE - 4, SIZE - 4);
       ctx.fillStyle = '#ef4444';
       ctx.fillRect((goal % COLS) * SIZE + 2, Math.floor(goal / COLS) * SIZE + 2, SIZE - 4, SIZE - 4);
 
-      // paredes
       ctx.strokeStyle = wall;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -250,29 +346,51 @@ export default function MazeVisualizer() {
     };
   }, [draw, result, reduced]);
 
+  // Recolore o canvas quando o tema muda (as cores vêm dos tokens CSS).
+  useEffect(() => {
+    const obs = new MutationObserver(() => draw(result.order.length));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, [draw, result]);
+
   return (
     <div className="not-prose rounded-xl border border-border bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Algoritmo">
-          {SOLVERS.map((s) => (
+        <span className="text-xs text-muted">{t.gen}:</span>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label={t.gen}>
+          {GENS.map((gn) => (
             <button
-              key={s.id}
+              key={gn.id}
               type="button"
-              onClick={() => setSolver(s.id)}
-              aria-pressed={solver === s.id}
+              onClick={() => setGen(gn.id)}
+              aria-pressed={gen === gn.id}
               className={`rounded-md border px-2.5 py-1 text-sm transition-colors ${
-                solver === s.id
-                  ? 'border-accent text-accent'
-                  : 'border-border text-muted hover:border-accent/50'
+                gen === gn.id ? 'border-accent text-accent' : 'border-border text-muted hover:border-accent/50'
               }`}
             >
-              {s.label}
+              {gn.label}
             </button>
           ))}
         </div>
         <button type="button" onClick={() => setSeed((s) => s + 1)} className="btn ml-auto">
-          ↻ Novo labirinto
+          {t.newMaze}
         </button>
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label={t.algo}>
+        {SOLVERS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setSolver(s.id)}
+            aria-pressed={solver === s.id}
+            className={`rounded-md border px-2.5 py-1 text-sm transition-colors ${
+              solver === s.id ? 'border-accent text-accent' : 'border-border text-muted hover:border-accent/50'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
       </div>
 
       <canvas
@@ -280,24 +398,57 @@ export default function MazeVisualizer() {
         width={COLS * SIZE}
         height={ROWS * SIZE}
         className="mx-auto block max-w-full rounded-lg"
-        aria-label={`Labirinto resolvido por ${solver}. ${metrics.explored} nós explorados, caminho de ${metrics.pathLen}.`}
+        aria-label={`${solver}: ${result.order.length} ${t.explored}, ${result.path.length} ${t.path}.`}
       />
 
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
-        <Metric label="Nós explorados" value={metrics.explored} />
-        <Metric label="Tamanho do caminho" value={metrics.pathLen} />
-        <Metric label="Eficiência" value={`${Math.round((metrics.pathLen / metrics.explored) * 100)}%`} />
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted">
+        <Legend swatch="bg-emerald-500" label={t.legStart} />
+        <Legend swatch="bg-red-500" label={t.legGoal} />
+        <Legend swatch="bg-accent/30" label={t.legExplored} />
+        <Legend swatch="bg-accent" label={t.legPath} />
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-muted">
+              <th className="py-1 text-left font-medium">{t.th}</th>
+              <th className="py-1 text-right font-medium">{t.explored}</th>
+              <th className="py-1 text-right font-medium">{t.path}</th>
+              <th className="py-1 text-right font-medium">{t.eff}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {comparison.map((c) => {
+              const active = c.id === solver;
+              return (
+                <tr
+                  key={c.id}
+                  onClick={() => setSolver(c.id)}
+                  className={`cursor-pointer border-t border-border transition-colors ${
+                    active ? 'text-accent' : 'text-fg hover:text-accent'
+                  }`}
+                >
+                  <td className="py-1.5">{c.label}</td>
+                  <td className="py-1.5 text-right font-mono">{c.explored}</td>
+                  <td className="py-1.5 text-right font-mono">{c.pathLen}</td>
+                  <td className="py-1.5 text-right font-mono">{c.eff}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: number | string }) {
+function Legend({ swatch, label }: { swatch: string; label: string }) {
   return (
-    <div className="rounded-lg border border-border bg-bg p-2">
-      <div className="font-mono text-lg text-fg">{value}</div>
-      <div className="text-xs text-muted">{label}</div>
-    </div>
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`h-3 w-3 rounded-sm ${swatch}`} aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 

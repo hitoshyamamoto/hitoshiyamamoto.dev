@@ -9,15 +9,6 @@
     "license": "MIT"
   },
   {
-    "id": "maze-solver",
-    "repo": "maze-solver",
-    "url": "https://github.com/hitoshyamamoto/maze-solver",
-    "language": "TypeScript",
-    "stars": 0,
-    "lastCommit": "2026-06-10",
-    "license": "MIT"
-  },
-  {
     "id": "soapbar",
     "repo": "soapbar",
     "url": "https://github.com/hitoshyamamoto/soapbar",

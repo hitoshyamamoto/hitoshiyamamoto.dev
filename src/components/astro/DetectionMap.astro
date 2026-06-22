@@ -1,0 +1,64 @@
+---
+// Plano T² × SPE e os quatro quadrantes de desvio.
+const W = 560;
+const H = 320;
+const pad = { l: 44, r: 16, t: 16, b: 40 };
+const plotW = W - pad.l - pad.r;
+const plotH = H - pad.t - pad.b;
+
+// limiares (frações do plano)
+const tx = pad.l + plotW * 0.52; // limiar de T²
+const ty = pad.t + plotH * 0.46; // limiar de SPE (lembrando: y cresce para baixo)
+
+// pontos-exemplo por quadrante (x = T², y = SPE), em frações 0..1
+const pts = [
+  { x: 0.2, y: 0.78, c: 'emerald' }, // normal
+  { x: 0.32, y: 0.66, c: 'emerald' },
+  { x: 0.78, y: 0.7, c: 'amber' }, // T² alto (extremo coerente)
+  { x: 0.27, y: 0.18, c: 'sky' }, // SPE alto (correlação quebrou)
+  { x: 0.82, y: 0.16, c: 'red' }, // ambos (falha clara)
+];
+const px = (f: number) => pad.l + f * plotW;
+const py = (f: number) => pad.t + f * plotH;
+const dot: Record<string, string> = {
+  emerald: 'fill-emerald-500',
+  amber: 'fill-amber-500',
+  sky: 'fill-sky-500',
+  red: 'fill-red-500',
+};
+---
+
+<figure class="not-prose my-6 rounded-xl border border-border bg-surface p-4">
+  <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Mapa de detecção: plano T² versus SPE dividido em quatro quadrantes." class="rounded-lg bg-bg">
+    {/* tintas dos quadrantes */}
+    <rect x={pad.l} y={ty} width={tx - pad.l} height={pad.t + plotH - ty} class="fill-emerald-500/10" />
+    <rect x={tx} y={ty} width={pad.l + plotW - tx} height={pad.t + plotH - ty} class="fill-amber-500/10" />
+    <rect x={pad.l} y={pad.t} width={tx - pad.l} height={ty - pad.t} class="fill-sky-500/10" />
+    <rect x={tx} y={pad.t} width={pad.l + plotW - tx} height={ty - pad.t} class="fill-red-500/10" />
+
+    {/* rótulos dos quadrantes */}
+    <text x={(pad.l + tx) / 2} y={(ty + pad.t + plotH) / 2} text-anchor="middle" class="fill-emerald-500" font-size="11">normal</text>
+    <text x={(tx + pad.l + plotW) / 2} y={(ty + pad.t + plotH) / 2 - 6} text-anchor="middle" class="fill-amber-500" font-size="10">regime extremo,</text>
+    <text x={(tx + pad.l + plotW) / 2} y={(ty + pad.t + plotH) / 2 + 8} text-anchor="middle" class="fill-amber-500" font-size="10">porém coerente</text>
+    <text x={(pad.l + tx) / 2} y={(pad.t + ty) / 2 - 6} text-anchor="middle" class="fill-sky-500" font-size="10">correlação quebrou</text>
+    <text x={(pad.l + tx) / 2} y={(pad.t + ty) / 2 + 8} text-anchor="middle" class="fill-sky-500" font-size="10">(padrão novo)</text>
+    <text x={(tx + pad.l + plotW) / 2} y={(pad.t + ty) / 2 + 2} text-anchor="middle" class="fill-red-500" font-size="11" font-weight="600">falha clara</text>
+
+    {/* linhas de limiar */}
+    <line x1={tx} y1={pad.t} x2={tx} y2={pad.t + plotH} class="stroke-muted" stroke-width="1.25" stroke-dasharray="5 4" />
+    <line x1={pad.l} y1={ty} x2={pad.l + plotW} y2={ty} class="stroke-muted" stroke-width="1.25" stroke-dasharray="5 4" />
+
+    {/* pontos-exemplo */}
+    {pts.map((p) => <circle cx={px(p.x)} cy={py(p.y)} r={5} class={dot[p.c]} />)}
+
+    {/* eixos */}
+    <line x1={pad.l} y1={pad.t} x2={pad.l} y2={pad.t + plotH} class="stroke-border" stroke-width="1" />
+    <line x1={pad.l} y1={pad.t + plotH} x2={pad.l + plotW} y2={pad.t + plotH} class="stroke-border" stroke-width="1" />
+    <text x={pad.l + plotW / 2} y={H - 8} text-anchor="middle" class="fill-muted" font-size="11">T² (distância dentro do modelo) →</text>
+    <text x={14} y={pad.t + plotH / 2} transform={`rotate(-90 14 ${pad.t + plotH / 2})`} text-anchor="middle" class="fill-muted" font-size="11">SPE (resíduo, fora do modelo) →</text>
+  </svg>
+  <figcaption class="mt-3 text-xs text-muted">
+    Cada estatística sozinha enxerga metade do mapa. Juntas, separam "normal" de três modos distintos de desvio:
+    por isso se monitora SPE <strong>e</strong> T².
+  </figcaption>
+</figure>

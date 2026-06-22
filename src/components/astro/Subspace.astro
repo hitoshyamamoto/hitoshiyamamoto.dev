@@ -1,0 +1,66 @@
+---
+// Dados correlacionados concentrados num subespaço plano, em projeção isométrica.
+const s = 78;
+const ox = 200;
+const oy = 150;
+const iso = (a: number, b: number, c: number): [number, number] => [ox + (a - b) * 0.866 * s, oy + (a + b) * 0.5 * s - c * s];
+
+const edges: [number[], number[]][] = [
+  [[0, 0, 0], [1, 0, 0]], [[0, 0, 0], [0, 1, 0]], [[0, 0, 0], [0, 0, 1]],
+  [[1, 0, 0], [1, 1, 0]], [[0, 1, 0], [1, 1, 0]], [[1, 1, 0], [1, 1, 1]],
+  [[1, 0, 0], [1, 0, 1]], [[0, 1, 0], [0, 1, 1]], [[0, 0, 1], [1, 0, 1]],
+  [[0, 0, 1], [0, 1, 1]], [[1, 0, 1], [1, 1, 1]], [[0, 1, 1], [1, 1, 1]],
+];
+
+const planeC = (a: number, b: number) => 0.18 + 0.32 * a + 0.3 * b;
+const planeCorners = ([[0, 0], [1, 0], [1, 1], [0, 1]] as [number, number][])
+  .map(([a, b]) => iso(a, b, planeC(a, b)));
+const planePath = 'M' + planeCorners.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L') + ' Z';
+
+const pts: [number, number][] = [];
+for (let i = 0; i < 20; i++) {
+  const a = (i * 0.61803) % 1;
+  const b = (i * 0.32472 + 0.2) % 1;
+  const noise = (((i * 37) % 7) - 3) * 0.012;
+  pts.push(iso(a, b, planeC(a, b) + noise));
+}
+
+const ax = iso(1, 0, 0);
+const ay = iso(0, 1, 0);
+const az = iso(0, 0, 1);
+const e = (p: number[]) => {
+  const [a, b, c] = p;
+  return iso(a, b, c);
+};
+---
+
+<figure class="not-prose my-6 rounded-xl border border-border bg-surface p-4">
+  <svg viewBox="0 0 400 270" width="100%" role="img" aria-label="Dados em alta dimensão concentrados sobre um subespaço plano de poucas dimensões." class="rounded-lg bg-bg">
+    {/* arestas do cubo (o espaço de todos os sensores) */}
+    {edges.map(([p1, p2]) => {
+      const [x1, y1] = e(p1);
+      const [x2, y2] = e(p2);
+      return <line x1={x1} y1={y1} x2={x2} y2={y2} class="stroke-border" stroke-width="1" />;
+    })}
+
+    {/* o subespaço onde os dados realmente vivem */}
+    <path d={planePath} class="fill-accent/15 stroke-accent/60" stroke-width="1.25" />
+
+    {/* leituras: sobre a folha */}
+    {pts.map(([x, y]) => <circle cx={x} cy={y} r={2.6} class="fill-accent" />)}
+
+    {/* rótulos dos eixos */}
+    <text x={ax[0] + 4} y={ax[1] + 12} class="fill-muted" font-size="10">sensor i</text>
+    <text x={ay[0] - 40} y={ay[1] + 12} class="fill-muted" font-size="10">sensor j</text>
+    <text x={az[0] - 8} y={az[1] - 6} class="fill-muted" font-size="10">sensor k …</text>
+
+    <text x={planeCorners[2][0] - 4} y={planeCorners[2][1] + 16} text-anchor="end" class="fill-accent" font-size="10">
+      subespaço (poucas dimensões)
+    </text>
+  </svg>
+  <figcaption class="mt-3 text-xs text-muted">
+    Cada leitura é um ponto no espaço de <em>todos</em> os sensores (o cubo). Mas, por causa da correlação, os
+    pontos não preenchem o volume: eles se concentram sobre uma <strong>folha plana de poucas dimensões</strong>.
+    É essa folha que o PCA aprende.
+  </figcaption>
+</figure>
