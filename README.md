@@ -112,7 +112,7 @@ versão) para hardening e Node lido do `.nvmrc`:
 - `deploy.yml`: type-check (`astro check`) + build + deploy em todo push na `main`.
 - `ci.yml`: em Pull Requests para a `main`, roda type-check + build (sem deploy),
   pegando erros antes do merge.
-- `refresh-data.yml`: cron a cada 6h: roda os fetchers e commita os JSON; esse
+- `refresh-data.yml`: cron diário (06:00 UTC): roda os fetchers e commita os JSON; esse
   commit dispara o `deploy`.
 
 ## Estrutura
