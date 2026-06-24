@@ -5,7 +5,7 @@ export const SITE = {
   title: 'Hitoshi Yamamoto: escritos, projetos e labs',
   description:
     'Hub pessoal de Hitoshi Yamamoto: artigos, projetos de engenharia e demos interativos.',
-  url: 'https://hitoshiyamamoto.dev',
+  url: 'https://hitoshyamamoto.github.io',
   locale: 'pt_BR',
   author: '@hitoshyamamoto',
   defaultOg: '/og/default.svg', // substituir por geração de OG por página

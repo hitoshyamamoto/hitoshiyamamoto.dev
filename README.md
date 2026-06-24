@@ -103,8 +103,11 @@ EN vive sob `/en` com os segmentos traduzidos (`/en/writing`, `/en/projects`,
 1. Crie um repositório no GitHub e suba este projeto na branch `main`.
 2. Em **Settings > Pages**, defina *Source* = **GitHub Actions**.
 3. Ajuste `site` (e `base`, se for um repo de projeto) em `astro.config.mjs`.
-   - Domínio próprio: `site: 'https://hitoshiyamamoto.dev'`, sem `base`.
+   - User Page (repo `<user>.github.io`): `site: 'https://<user>.github.io'`, sem `base`.
    - Pages de projeto: `site: 'https://<user>.github.io'`, `base: '/<repo>'`.
+   - Domínio próprio: `site` com o domínio, sem `base`, mais `public/CNAME`.
+
+Hoje o site é uma User Page: `site: 'https://hitoshyamamoto.github.io'`, servida na raiz.
 
 Workflows (`.github/workflows/`), com actions fixadas por SHA (comentário da
 versão) para hardening e Node lido do `.nvmrc`:
